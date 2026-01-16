@@ -1,0 +1,28 @@
+[package]
+name = "transponder-core"
+version = "2026.1.14"
+edition = "2021"
+license = "MPL-2.0"
+
+[lib]
+crate-type = ["lib", "cdylib", "staticlib"]
+name = "transponder_core"
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "uniffi-bindgen.rs"
+
+[dependencies]
+uniffi = { version = "0.30", features = ["cli"] }
+ed25519-dalek = { version = "2.2.0", features = ["rand_core", "hazmat"] }
+x25519-dalek = { version = "2.0", features = ["static_secrets"] }
+curve25519-dalek = "4.1"
+aes-gcm = "0.10"
+base64 = "0.22.1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+rand = "0.8"
+thiserror = "1.0"
+sha2 = "0.10"
+urlencoding = "2.1"
+

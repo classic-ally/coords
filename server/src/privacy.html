@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transponder Privacy Policy</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem;
+            color: #333;
+        }
+        h1 { color: #007AFF; }
+        h2 { color: #555; border-bottom: 1px solid #eee; padding-bottom: 0.5rem; margin-top: 2rem; }
+        table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+        th, td { border: 1px solid #ddd; padding: 0.5rem; text-align: left; }
+        th { background: #f5f5f5; }
+        code { background: #f5f5f5; padding: 0.2rem 0.4rem; border-radius: 3px; }
+        .summary { background: #f0f7ff; padding: 1rem; border-radius: 8px; margin: 1rem 0; }
+        .summary ul { margin: 0; }
+        hr { border: none; border-top: 1px solid #eee; margin: 2rem 0; }
+        @media (prefers-color-scheme: dark) {
+            body { background: #1a1a1a; color: #e0e0e0; }
+            h1 { color: #4da6ff; }
+            h2 { color: #aaa; border-bottom-color: #333; }
+            th { background: #2a2a2a; }
+            th, td { border-color: #444; }
+            code { background: #2a2a2a; }
+            .summary { background: #1a2a3a; }
+        }
+    </style>
+</head>
+<body>
+    <h1>Transponder Privacy Policy</h1>
+    <p><em>Last updated: January 12, 2026</em></p>
+
+    <p>Transponder is a location sharing app designed with privacy as a core principle. This policy explains what data we collect, how it's protected, and your rights.</p>
+
+    <div class="summary">
+        <h2 style="margin-top: 0; border: none;">Summary</h2>
+        <ul>
+            <li><strong>Your location is end-to-end encrypted</strong> — only friends you explicitly add can see it</li>
+            <li><strong>The server cannot read your location</strong> — it only stores encrypted data it cannot decrypt</li>
+            <li><strong>No analytics or tracking</strong> — we don't use any third-party analytics, advertising, or tracking services</li>
+            <li><strong>Your data stays on your device</strong> — cryptographic keys never leave your phone</li>
+        </ul>
+    </div>
+
+    <h2>Data We Collect</h2>
+
+    <h3>Location Data</h3>
+    <ul>
+        <li>Latitude and longitude (precise location)</li>
+        <li>Location accuracy (in meters)</li>
+        <li>Timestamp of when location was captured</li>
+    </ul>
+    <p><strong>How it's used:</strong> Shared with friends you choose, displayed on the map.</p>
+    <p><strong>How it's protected:</strong> Encrypted on your device using AES-256-GCM before transmission. The server only stores encrypted data it cannot decrypt.</p>
+
+    <h3>Identity Information</h3>
+    <ul>
+        <li>Display name (chosen by you)</li>
+        <li>Cryptographic public key (used to identify you to friends)</li>
+    </ul>
+    <p><strong>How it's used:</strong> Your display name is shared with friends via friend links. Your public key identifies you in the system.</p>
+    <p><strong>How it's protected:</strong> Display name is stored locally. Cryptographic keys are stored in secure device storage (iOS Keychain / Android Keystore).</p>
+
+    <h3>Friend List</h3>
+    <ul>
+        <li>Friends' names, public keys, and server URLs</li>
+        <li>Your sharing preferences for each friend</li>
+    </ul>
+    <p><strong>How it's used:</strong> Determines who can see your location and whose location you can see.</p>
+    <p><strong>How it's protected:</strong> Stored locally on your device only.</p>
+
+    <h2>Data We Do NOT Collect</h2>
+    <ul>
+        <li>Email addresses or phone numbers</li>
+        <li>Passwords or account credentials</li>
+        <li>Device identifiers or advertising IDs</li>
+        <li>Usage analytics or behavioral data</li>
+        <li>Crash reports or diagnostics</li>
+        <li>Any data from your contacts, photos, or other apps</li>
+    </ul>
+
+    <h2>How Encryption Works</h2>
+    <p>Transponder uses end-to-end encryption, meaning your location is encrypted on your device before it ever leaves your phone.</p>
+    <ol>
+        <li><strong>Key Generation:</strong> When you create your identity, cryptographic keys (Ed25519 and X25519) are generated on your device</li>
+        <li><strong>Encryption:</strong> Your location is encrypted with AES-256-GCM using keys derived from your friends' public keys</li>
+        <li><strong>Transmission:</strong> Only encrypted data is sent to the server</li>
+        <li><strong>Decryption:</strong> Only friends with the matching private keys can decrypt your location</li>
+    </ol>
+    <p><strong>The server never has access to your unencrypted location data.</strong></p>
+
+    <h2>Data Storage</h2>
+
+    <h3>On Your Device</h3>
+    <table>
+        <tr><th>Data</th><th>Storage Method</th></tr>
+        <tr><td>Private keys</td><td>iOS Keychain / Android Keystore (hardware-backed when available)</td></tr>
+        <tr><td>Display name</td><td>iOS UserDefaults / Android SharedPreferences</td></tr>
+        <tr><td>Friends list</td><td>Local JSON file</td></tr>
+        <tr><td>Cached friend locations</td><td>Local storage</td></tr>
+    </table>
+
+    <h3>On Servers</h3>
+    <ul>
+        <li>Encrypted location blobs (server cannot decrypt)</li>
+        <li>Public keys (necessary for the protocol)</li>
+        <li>Timestamps</li>
+    </ul>
+
+    <h2>Third-Party Services</h2>
+
+    <h3>Maps</h3>
+    <ul>
+        <li><strong>iOS:</strong> Apple MapKit (Apple's privacy policy applies)</li>
+        <li><strong>Android:</strong> MapLibre (open-source, no data transmitted)</li>
+    </ul>
+    <p>Maps are display-only. Your location data is not sent to mapping services.</p>
+
+    <h3>No Other Third Parties</h3>
+    <p>We do not use analytics services, crash reporting, advertising networks, or social media SDKs.</p>
+
+    <h2>Data Sharing</h2>
+    <p>Your location is only shared with:</p>
+    <ul>
+        <li><strong>Friends you explicitly add</strong> — via QR code or link</li>
+        <li><strong>The Transponder server</strong> — as encrypted data only</li>
+    </ul>
+    <p>We do not sell, rent, or share your data with any third parties for marketing or advertising purposes.</p>
+
+    <h2>Data Retention</h2>
+    <h3>On Device</h3>
+    <ul>
+        <li>Data persists until you delete the app or remove it manually</li>
+        <li>Uninstalling the app deletes all local data</li>
+    </ul>
+    <h3>On Server</h3>
+    <ul>
+        <li>The server stores encrypted location data</li>
+        <li>Server retention policies depend on which server you use</li>
+        <li>Self-hosted servers: you control retention</li>
+    </ul>
+
+    <h2>Your Rights</h2>
+    <h3>Access &amp; Deletion</h3>
+    <ul>
+        <li>View all your data within the app</li>
+        <li>Delete your identity and all local data through the app</li>
+        <li>Remove individual friends at any time</li>
+    </ul>
+    <h3>Opt-Out</h3>
+    <ul>
+        <li>Disable location sharing entirely</li>
+        <li>Disable background location updates</li>
+        <li>Choose which friends can see you (per-friend controls)</li>
+    </ul>
+
+    <h2>Background Location</h2>
+    <p>If you enable "Always Allow" location permission:</p>
+    <ul>
+        <li>The app may update your location in the background</li>
+        <li>Updates occur approximately every 15 minutes or when you move significantly (~500m)</li>
+        <li>You can disable this at any time in Settings</li>
+    </ul>
+    <p>Background location is <strong>optional</strong> and only used if you enable automatic sharing.</p>
+
+    <h2>Security</h2>
+    <ul>
+        <li><strong>AES-256-GCM</strong> encryption for location data</li>
+        <li><strong>Ed25519</strong> signatures for authentication</li>
+        <li><strong>X25519</strong> key exchange for secure key derivation</li>
+        <li><strong>HTTPS</strong> for all network communication</li>
+        <li><strong>Hardware-backed</strong> key storage when available</li>
+    </ul>
+
+    <h2>Self-Hosting</h2>
+    <p>Transponder supports self-hosted servers. If you run your own server, you control all server-side data and retention policies.</p>
+
+    <h2>Children's Privacy</h2>
+    <p>Transponder is not intended for children under 13. We do not knowingly collect data from children.</p>
+
+    <h2>Changes to This Policy</h2>
+    <p>We may update this policy from time to time. Significant changes will be noted in app updates.</p>
+
+    <h2>Contact</h2>
+    <p>For privacy questions or data requests, contact: <strong>privacy@bentley.sh</strong></p>
+
+    <h2>Open Source</h2>
+    <p>Transponder is open source software. The source code for the iOS app, Android app, and server is available upon request. Contact us if you'd like to review or audit the code.</p>
+</body>
+</html>

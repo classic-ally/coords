@@ -1,0 +1,28 @@
+/target
+.DS_Store
+.direnv/
+
+# Android
+android/.idea/
+android/.kotlin/errors
+android/app/src/main/jniLibs/arm64-v8a/libtransponder_core.so
+
+# Apple build artifacts (regenerate with apple/build-xcframework.sh)
+apple/build/
+apple/Transponder/Transponder/transponder_core.xcframework/
+apple/Transponder/transponder_core.xcframework/
+
+# SSL certificates
+*.crt
+*.key
+
+# Tailscale config
+serve.json
+
+# Root-level cargo-about templates (HTML generation)
+/about.toml
+/about.hbs
+
+# Xcode user data
+xcuserdata/
+result

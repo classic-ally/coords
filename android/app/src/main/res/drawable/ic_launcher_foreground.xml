@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Location pin centered in safe zone (108dp canvas, icon in center 72dp area) -->
+    <group
+        android:translateX="54"
+        android:translateY="50"
+        android:scaleX="0.65"
+        android:scaleY="0.65">
+        <!-- Pin body (circle + triangle) -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M0,-24 C-13.2,-24 -24,-13.2 -24,0 C-24,13.2 0,36 0,36 C0,36 24,13.2 24,0 C24,-13.2 13.2,-24 0,-24 Z" />
+        <!-- Inner circle (cutout effect) -->
+        <path
+            android:fillColor="#007AFF"
+            android:pathData="M0,-8 C-4.4,-8 -8,-4.4 -8,0 C-8,4.4 -4.4,8 0,8 C4.4,8 8,4.4 8,0 C8,-4.4 4.4,-8 0,-8 Z" />
+    </group>
+</vector>

@@ -1,0 +1,43 @@
+---
+title: Coords
+description: Private location sharing
+template: splash
+hero:
+  title: <span class="bubble">drop me the coords</span>
+  tagline: Coords lets you share your location, privately.
+  image:
+    html: <img src="/hero-devices.webp" alt="Coords app on iPhone and Android" />
+  actions:
+    - text: GitHub
+      link: https://github.com/classic-ally
+      icon: external
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+
+## For everyone
+
+<CardGrid>
+  <Card title="Just works—anywhere" icon="star">
+    Add friends, share your location. Done.<br />
+    iOS, Android, and more coming.
+  </Card>
+  <Card title="Always private" icon="seti:lock">
+    Your location is end-to-end encrypted before uploading.<br />
+    No accounts, no tracking.
+  </Card>
+</CardGrid>
+
+## For builders
+
+<CardGrid>
+  <Card title="Your location primitive" icon="rocket">
+    Asset tracking? Fleet management? Family check-ins?<br />
+    Same simple endpoints, endless possibilities.
+  </Card>
+  <Card title="Open and yours" icon="open-book">
+    Self-host in minutes—keep your friends with federation.<br />
+    AGPL keeps the platform open. MPL core is yours to build on.
+  </Card>
+</CardGrid>

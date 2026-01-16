@@ -1,0 +1,154 @@
+{
+  "frontend": {
+    "versions": [
+      {
+        "version": "0.8.0",
+        "date": "2026-01-12",
+        "changes": []
+      },
+      {
+        "version": "0.8.1",
+        "date": "2026-01-13",
+        "changes": [
+          {
+            "type": "fix",
+            "platforms": ["ios"],
+            "title": "Auto-share toggle now enables correctly",
+            "description": "Fixed issue where granting 'Always' location permission didn't enable auto-share"
+          },
+          {
+            "type": "fix",
+            "platforms": ["ios"],
+            "title": "QR exchange 'I show first' flow",
+            "description": "Fixed scanning not completing when using 'I show first' workflow"
+          },
+          {
+            "type": "feature",
+            "platforms": ["ios", "android"],
+            "title": "Instant location sharing on friend add",
+            "description": "Adding a friend now shares your location immediately if auto-share is enabled"
+          },
+          {
+            "type": "feature",
+            "platforms": ["ios", "android"],
+            "title": "Automatic location fetch after adding friend",
+            "description": "Friend locations are now fetched automatically after completing the add friend flow"
+          },
+          {
+            "type": "feature",
+            "platforms": ["ios", "android"],
+            "title": "Tappable map markers",
+            "description": "Tap a friend's marker on the map to select them, center the view, and show their details"
+          },
+          {
+            "type": "change",
+            "platforms": ["ios"],
+            "title": "QR exchange defaults to 'I show first'",
+            "description": "iOS now defaults to showing your QR code first, complementing Android's scan-first default"
+          },
+          {
+            "type": "feature",
+            "platforms": ["ios", "android"],
+            "title": "Share link option on QR exchange screens",
+            "description": "Added 'Share Link Instead' button when showing your QR code for easier remote sharing"
+          },
+          {
+            "type": "feature",
+            "platforms": ["android"],
+            "title": "Add with link option on scan screen",
+            "description": "Can now paste a friend link instead of scanning QR code, matching iOS functionality"
+          },
+          {
+            "type": "change",
+            "platforms": ["ios"],
+            "title": "Prevent accidental dismissal during QR exchange",
+            "description": "Cannot swipe to dismiss the add friend sheet after starting the second step"
+          }
+        ]
+      },
+      {
+        "version": "0.8.2",
+        "date": "2026-01-13",
+        "changes": [
+          {
+            "type": "fix",
+            "platforms": ["ios"],
+            "title": "Skip unnecessary location upload on launch",
+            "description": "App no longer attempts to upload location on launch when there are no share recipients"
+          },
+          {
+            "type": "change",
+            "platforms": ["ios"],
+            "title": "Remove redundant location button",
+            "description": "Removed the map location button since the profile icon already centers on your location"
+          },
+          {
+            "type": "fix",
+            "platforms": ["ios", "android"],
+            "title": "Prevent uploading stale cached locations",
+            "description": "App now skips uploading locations older than what was last successfully sent"
+          },
+          {
+            "type": "feature",
+            "platforms": ["ios", "android"],
+            "title": "Periodic foreground location sharing",
+            "description": "When auto-share is enabled, location is now shared every minute while the app is in the foreground"
+          },
+          {
+            "type": "fix",
+            "platforms": ["ios", "android"],
+            "title": "Standardized location freshness handling",
+            "description": "All upload paths now use consistent logic: explicit actions request fresh GPS, background tasks use cached if recent"
+          },
+          {
+            "type": "feature",
+            "platforms": ["android"],
+            "title": "Configurable location settings",
+            "description": "Advanced location settings page lets users adjust GPS timeout, accuracy thresholds, and test GPS acquisition"
+          }
+        ]
+      }
+    ]
+  },
+  "core": {
+    "versions": [
+      {
+        "version": "2026.1.7",
+        "date": "2026-01-07",
+        "changes": []
+      },
+      {
+        "version": "2026.1.13",
+        "date": "2026-01-13",
+        "changes": [
+          {
+            "type": "fix",
+            "title": "Validate public key length in friend links",
+            "description": "Friend links now validate that the public key is exactly 32 bytes, rejecting malformed links earlier"
+          },
+          {
+            "type": "fix",
+            "title": "Prevent uploading stale cached locations",
+            "description": "Core now tracks the last uploaded location timestamp and rejects uploads of older locations"
+          }
+        ]
+      },
+      {
+        "version": "2026.1.14",
+        "date": "2026-01-14",
+        "changes": [
+          {
+            "type": "feature",
+            "title": "Friend count obfuscation via padding",
+            "description": "Entry count is padded to buckets (power of 2 up to 64, then nearest 50) to hide exact friend count from server."
+          },
+          {
+            "type": "change",
+            "title": "Blob format version byte",
+            "description": "Added version byte (0x02) prefix for future format compatibility. Breaking change: old blobs will not decrypt."
+          }
+        ]
+      }
+    ]
+  }
+}

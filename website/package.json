@@ -1,0 +1,18 @@
+{
+  "name": "coords-website",
+  "type": "module",
+  "version": "0.0.1",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "generate-hero": "node scripts/generate-hero.js"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "^0.37.0",
+    "@tailwindcss/vite": "^4.1.18",
+    "astro": "^5.0.0",
+    "sharp": "^0.34.0",
+    "tailwindcss": "^4.1.18"
+  }
+}
