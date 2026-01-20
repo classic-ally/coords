@@ -16,7 +16,31 @@
   in {
     packages = forAllSystems (system:
       let
-        pkgs = nixpkgs.legacyPackages.${system};
+        pkgs = import nixpkgs {
+          inherit system;
+          config.allowUnfree = true;
+          config.android_sdk.accept_license = true;
+        };
+
+        # Rust toolchain with Android targets via fenix
+        rustToolchain = fenix.packages.${system}.combine [
+          fenix.packages.${system}.stable.cargo
+          fenix.packages.${system}.stable.rustc
+          fenix.packages.${system}.stable.rust-src
+          fenix.packages.${system}.targets.aarch64-linux-android.stable.rust-std
+          fenix.packages.${system}.targets.armv7-linux-androideabi.stable.rust-std
+          fenix.packages.${system}.targets.x86_64-linux-android.stable.rust-std
+          fenix.packages.${system}.targets.i686-linux-android.stable.rust-std
+        ];
+
+        # Android SDK with NDK for cross-compilation
+        androidComposition = pkgs.androidenv.composeAndroidPackages {
+          platformVersions = [ "36" ];
+          buildToolsVersions = [ "35.0.0" "36.0.0" ];  # AGP 8.x needs 35
+          includeNDK = true;
+          ndkVersions = [ "26.3.11579264" ];
+        };
+        androidSdk = androidComposition.androidsdk;
       in {
         default = self.packages.${system}.coords-server;
 
@@ -55,6 +79,18 @@
             license = licenses.agpl3Only;
           };
         };
+        # Android build toolchain (for CI)
+        android-toolchain = pkgs.buildEnv {
+          name = "android-toolchain";
+          paths = [
+            rustToolchain
+            androidSdk
+            pkgs.cargo-ndk
+            pkgs.jdk17
+            pkgs.gradle
+          ];
+        };
+
       } // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
         # Docker image (Linux only)
         coords-docker = pkgs.dockerTools.buildLayeredImage {
@@ -127,45 +163,23 @@
 
     devShells = forAllSystems (system:
       let
-        # Allow unfree packages (Android SDK)
         pkgs = import nixpkgs {
           inherit system;
           config.allowUnfree = true;
           config.android_sdk.accept_license = true;
         };
-
-        # Rust toolchain with Android targets via fenix
-        rustToolchain = fenix.packages.${system}.combine [
-          fenix.packages.${system}.stable.cargo
-          fenix.packages.${system}.stable.rustc
-          fenix.packages.${system}.stable.rust-src
-          fenix.packages.${system}.targets.aarch64-linux-android.stable.rust-std
-          fenix.packages.${system}.targets.armv7-linux-androideabi.stable.rust-std
-          fenix.packages.${system}.targets.x86_64-linux-android.stable.rust-std
-          fenix.packages.${system}.targets.i686-linux-android.stable.rust-std
-        ];
-
-        # Android SDK with NDK for cross-compilation
-        androidComposition = pkgs.androidenv.composeAndroidPackages {
-          platformVersions = [ "34" ];
-          buildToolsVersions = [ "34.0.0" ];
+        inherit (self.packages.${system}) android-toolchain;
+        androidSdk = (pkgs.androidenv.composeAndroidPackages {
+          platformVersions = [ "36" ];
+          buildToolsVersions = [ "35.0.0" "36.0.0" ];  # AGP 8.x needs 35
           includeNDK = true;
           ndkVersions = [ "26.3.11579264" ];
-        };
-        androidSdk = androidComposition.androidsdk;
+        }).androidsdk;
       in {
         default = pkgs.mkShell {
           buildInputs = [
-            # Rust with Android targets
-            rustToolchain
+            android-toolchain
             pkgs.rust-analyzer
-            pkgs.cargo-ndk
-
-            # Android
-            androidSdk
-            pkgs.jdk17
-
-            # Other tools
             pkgs.nodejs_24
             pkgs.git
             pkgs.jq

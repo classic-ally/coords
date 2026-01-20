@@ -1,0 +1,36 @@
+when:
+  - event: ["push", "pull_request"]
+    branch: ["master"]
+
+engine: "nixery"
+
+dependencies:
+  nixpkgs:
+    - findutils
+    - gnused
+    - gcc
+  git+https://tangled.org/bentley.sh/coords:
+    - android-toolchain
+
+environment:
+  PATH: "/tangled/home/.nix-profile/bin:/bin"
+  ANDROID_HOME: "/tangled/home/.nix-profile/libexec/android-sdk"
+  ANDROID_NDK_HOME: "/tangled/home/.nix-profile/libexec/android-sdk/ndk/26.3.11579264"
+  JAVA_HOME: "/tangled/home/.nix-profile"
+  BUILD_ALL_ABIS: "true"
+
+steps:
+  - name: Decode keystore
+    command: |
+      echo "$KEYSTORE_BASE64" | base64 -d > /tmp/release.keystore
+      echo "Keystore decoded to /tmp/release.keystore"
+
+  - name: Build signed APK
+    command: |
+      cd android
+      # Use SDK's AAPT2 (Nix-patched) instead of Gradle's downloaded one
+      echo "" >> gradle.properties
+      echo "android.aapt2FromMavenOverride=$ANDROID_HOME/build-tools/35.0.0/aapt2" >> gradle.properties
+      ./gradlew assembleRelease --no-daemon
+    environment:
+      KEYSTORE_PATH: /tmp/release.keystore

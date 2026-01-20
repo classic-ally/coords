@@ -20,6 +20,15 @@ android {
         version = release(36)
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = System.getenv("KEYSTORE_PATH")?.let { file(it) }
+            storePassword = System.getenv("KEYSTORE_PASSWORD")
+            keyAlias = System.getenv("KEY_ALIAS")
+            keyPassword = System.getenv("KEYSTORE_PASSWORD") // PKCS12 uses same password
+        }
+    }
+
     defaultConfig {
         applicationId = "sh.bentley.transponder"
         minSdk = 31
@@ -43,6 +52,7 @@ android {
                 "proguard-rules.pro"
             )
             buildConfigField("Boolean", "USE_MOCK_FRIENDS", "false")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
     compileOptions {

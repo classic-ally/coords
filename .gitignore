@@ -20,6 +20,10 @@ apple/Transponder/Transponder/transponder_coreFFI.modulemap
 *.crt
 *.key
 
+# Android signing
+*.keystore
+*.jks
+
 # Tailscale config
 serve.json
 
