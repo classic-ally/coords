@@ -833,14 +833,16 @@ public func FfiConverterTypeLicenseGroup_lower(_ value: LicenseGroup) -> RustBuf
 public struct Location: Equatable, Hashable {
     public var latitude: Double
     public var longitude: Double
+    public var altitude: Double
     public var accuracy: Float
     public var timestamp: UInt64
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(latitude: Double, longitude: Double, accuracy: Float, timestamp: UInt64) {
+    public init(latitude: Double, longitude: Double, altitude: Double, accuracy: Float, timestamp: UInt64) {
         self.latitude = latitude
         self.longitude = longitude
+        self.altitude = altitude
         self.accuracy = accuracy
         self.timestamp = timestamp
     }
@@ -861,6 +863,7 @@ public struct FfiConverterTypeLocation: FfiConverterRustBuffer {
             try Location(
                 latitude: FfiConverterDouble.read(from: &buf), 
                 longitude: FfiConverterDouble.read(from: &buf), 
+                altitude: FfiConverterDouble.read(from: &buf), 
                 accuracy: FfiConverterFloat.read(from: &buf), 
                 timestamp: FfiConverterUInt64.read(from: &buf)
         )
@@ -869,6 +872,7 @@ public struct FfiConverterTypeLocation: FfiConverterRustBuffer {
     public static func write(_ value: Location, into buf: inout [UInt8]) {
         FfiConverterDouble.write(value.latitude, into: &buf)
         FfiConverterDouble.write(value.longitude, into: &buf)
+        FfiConverterDouble.write(value.altitude, into: &buf)
         FfiConverterFloat.write(value.accuracy, into: &buf)
         FfiConverterUInt64.write(value.timestamp, into: &buf)
     }

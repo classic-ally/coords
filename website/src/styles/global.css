@@ -31,16 +31,27 @@
   border-left: 0.35em solid transparent;
 }
 
-/* Style hero GitHub button to match bubble */
-.hero .actions a.sl-link-button {
+/* Style hero primary button to match bubble */
+.hero .actions a.sl-link-button:not([data-variant]) {
   background-color: rgb(59 130 246) !important;
   color: white !important;
   border-color: rgb(59 130 246) !important;
 }
 
-.hero .actions a.sl-link-button:hover {
+.hero .actions a.sl-link-button:not([data-variant]):hover {
   background-color: rgb(37 99 235) !important;
   border-color: rgb(37 99 235) !important;
+}
+
+/* Style hero secondary button */
+.hero .actions a.sl-link-button.secondary {
+  background-color: transparent !important;
+  color: rgb(59 130 246) !important;
+  border-color: rgb(59 130 246) !important;
+}
+
+.hero .actions a.sl-link-button.secondary:hover {
+  background-color: rgb(59 130 246 / 0.1) !important;
 }
 
 /* Give hero image more space */

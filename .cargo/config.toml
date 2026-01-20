@@ -1,11 +1,3 @@
-[target.aarch64-linux-android]
-linker = "/Users/allison/Library/Android/sdk/ndk/29.0.14206865/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android31-clang"
-
-[target.armv7-linux-androideabi]
-linker = "/Users/allison/Library/Android/sdk/ndk/29.0.14206865/toolchains/llvm/prebuilt/darwin-x86_64/bin/armv7a-linux-androideabi31-clang"
-
-[target.x86_64-linux-android]
-linker = "/Users/allison/Library/Android/sdk/ndk/29.0.14206865/toolchains/llvm/prebuilt/darwin-x86_64/bin/x86_64-linux-android31-clang"
-
-[target.i686-linux-android]
-linker = "/Users/allison/Library/Android/sdk/ndk/29.0.14206865/toolchains/llvm/prebuilt/darwin-x86_64/bin/i686-linux-android31-clang"
+# Android cross-compilation is handled by cargo-ndk
+# which auto-detects NDK location from ANDROID_NDK_HOME
+# No manual linker configuration needed

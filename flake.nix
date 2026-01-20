@@ -3,9 +3,13 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
+    fenix = {
+      url = "github:nix-community/fenix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs = { self, nixpkgs }:
+  outputs = { self, nixpkgs, fenix }:
   let
     systems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
     forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f system);
@@ -51,6 +55,18 @@
             license = licenses.agpl3Only;
           };
         };
+      } // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
+        # Docker image (Linux only)
+        coords-docker = pkgs.dockerTools.buildLayeredImage {
+          name = "coords-server";
+          tag = "latest";
+          contents = [ self.packages.${system}.coords-server ];
+          config = {
+            Cmd = [ "${self.packages.${system}.coords-server}/bin/coords-server" ];
+            Env = [ "COORDS_PORT=3000" ];
+            ExposedPorts = { "3000/tcp" = {}; };
+          };
+        };
       }
     );
 
@@ -79,6 +95,8 @@
             description = "Coords location relay";
             after = [ "network.target" ];
             wantedBy = [ "multi-user.target" ];
+
+            environment.COORDS_PORT = toString cfg.port;
 
             serviceConfig = {
               ExecStart = "${cfg.package}/bin/coords-server";
@@ -109,17 +127,55 @@
 
     devShells = forAllSystems (system:
       let
-        pkgs = nixpkgs.legacyPackages.${system};
+        # Allow unfree packages (Android SDK)
+        pkgs = import nixpkgs {
+          inherit system;
+          config.allowUnfree = true;
+          config.android_sdk.accept_license = true;
+        };
+
+        # Rust toolchain with Android targets via fenix
+        rustToolchain = fenix.packages.${system}.combine [
+          fenix.packages.${system}.stable.cargo
+          fenix.packages.${system}.stable.rustc
+          fenix.packages.${system}.stable.rust-src
+          fenix.packages.${system}.targets.aarch64-linux-android.stable.rust-std
+          fenix.packages.${system}.targets.armv7-linux-androideabi.stable.rust-std
+          fenix.packages.${system}.targets.x86_64-linux-android.stable.rust-std
+          fenix.packages.${system}.targets.i686-linux-android.stable.rust-std
+        ];
+
+        # Android SDK with NDK for cross-compilation
+        androidComposition = pkgs.androidenv.composeAndroidPackages {
+          platformVersions = [ "34" ];
+          buildToolsVersions = [ "34.0.0" ];
+          includeNDK = true;
+          ndkVersions = [ "26.3.11579264" ];
+        };
+        androidSdk = androidComposition.androidsdk;
       in {
         default = pkgs.mkShell {
-          buildInputs = with pkgs; [
-            rustc
-            cargo
-            rust-analyzer
-            nodejs_24
-            git
-            jq
+          buildInputs = [
+            # Rust with Android targets
+            rustToolchain
+            pkgs.rust-analyzer
+            pkgs.cargo-ndk
+
+            # Android
+            androidSdk
+            pkgs.jdk17
+
+            # Other tools
+            pkgs.nodejs_24
+            pkgs.git
+            pkgs.jq
           ];
+
+          shellHook = ''
+            export ANDROID_HOME="${androidSdk}/libexec/android-sdk"
+            export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/26.3.11579264"
+            export JAVA_HOME="${pkgs.jdk17}"
+          '';
         };
       }
     );

@@ -433,6 +433,7 @@ fun MainScreen(
                     locationSyncService.uploadLocation(
                         latitude = location.latitude,
                         longitude = location.longitude,
+                        altitude = location.altitude,
                         accuracy = location.accuracy,
                         timestamp = location.time
                     )
@@ -519,6 +520,7 @@ fun MainScreen(
                     locationSyncService.uploadLocation(
                         latitude = location.latitude,
                         longitude = location.longitude,
+                        altitude = location.altitude,
                         accuracy = location.accuracy,
                         timestamp = location.time
                     )
@@ -907,6 +909,7 @@ fun MainScreen(
                                     val result = locationSyncService.uploadLocation(
                                         latitude = location.latitude,
                                         longitude = location.longitude,
+                                        altitude = location.altitude,
                                         accuracy = location.accuracy,
                                         timestamp = location.time
                                     )

@@ -630,6 +630,7 @@ struct MainView: View {
             _ = await syncService.uploadLocation(
                 latitude: location.coordinate.latitude,
                 longitude: location.coordinate.longitude,
+                altitude: location.altitude,
                 accuracy: Float(location.horizontalAccuracy),
                 timestamp: UInt64(location.timestamp.timeIntervalSince1970 * 1000)
             )
@@ -1417,6 +1418,7 @@ struct ProfileSheetContent: View {
             let result = await syncService.uploadLocation(
                 latitude: location.coordinate.latitude,
                 longitude: location.coordinate.longitude,
+                altitude: location.altitude,
                 accuracy: Float(location.horizontalAccuracy),
                 timestamp: UInt64(location.timestamp.timeIntervalSince1970 * 1000)
             )

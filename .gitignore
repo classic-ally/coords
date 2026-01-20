@@ -12,6 +12,10 @@ apple/build/
 apple/Transponder/Transponder/transponder_core.xcframework/
 apple/Transponder/transponder_core.xcframework/
 
+# UniFFI-generated C headers (optional, FFI is inline in Swift file)
+apple/Transponder/Transponder/transponder_coreFFI.h
+apple/Transponder/Transponder/transponder_coreFFI.modulemap
+
 # SSL certificates
 *.crt
 *.key

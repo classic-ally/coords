@@ -1447,6 +1447,8 @@ data class Location (
     , 
     var `longitude`: kotlin.Double
     , 
+    var `altitude`: kotlin.Double
+    , 
     var `accuracy`: kotlin.Float
     , 
     var `timestamp`: kotlin.ULong
@@ -1466,6 +1468,7 @@ public object FfiConverterTypeLocation: FfiConverterRustBuffer<Location> {
         return Location(
             FfiConverterDouble.read(buf),
             FfiConverterDouble.read(buf),
+            FfiConverterDouble.read(buf),
             FfiConverterFloat.read(buf),
             FfiConverterULong.read(buf),
         )
@@ -1474,6 +1477,7 @@ public object FfiConverterTypeLocation: FfiConverterRustBuffer<Location> {
     override fun allocationSize(value: Location) = (
             FfiConverterDouble.allocationSize(value.`latitude`) +
             FfiConverterDouble.allocationSize(value.`longitude`) +
+            FfiConverterDouble.allocationSize(value.`altitude`) +
             FfiConverterFloat.allocationSize(value.`accuracy`) +
             FfiConverterULong.allocationSize(value.`timestamp`)
     )
@@ -1481,6 +1485,7 @@ public object FfiConverterTypeLocation: FfiConverterRustBuffer<Location> {
     override fun write(value: Location, buf: ByteBuffer) {
             FfiConverterDouble.write(value.`latitude`, buf)
             FfiConverterDouble.write(value.`longitude`, buf)
+            FfiConverterDouble.write(value.`altitude`, buf)
             FfiConverterFloat.write(value.`accuracy`, buf)
             FfiConverterULong.write(value.`timestamp`, buf)
     }

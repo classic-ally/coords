@@ -71,6 +71,7 @@ class LocationSyncService(
                 val uploadResult = uploadLocation(
                     latitude = location.latitude,
                     longitude = location.longitude,
+                    altitude = location.altitude,
                     accuracy = location.accuracy,
                     timestamp = location.time
                 )
@@ -90,6 +91,7 @@ class LocationSyncService(
     suspend fun uploadLocation(
         latitude: Double,
         longitude: Double,
+        altitude: Double,
         accuracy: Float,
         timestamp: Long
     ): UploadResult {
@@ -108,6 +110,7 @@ class LocationSyncService(
         val location = Location(
             latitude = latitude,
             longitude = longitude,
+            altitude = altitude,
             accuracy = accuracy,
             timestamp = timestamp.toULong()
         )

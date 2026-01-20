@@ -1,0 +1,183 @@
+---
+import type { Props } from '@astrojs/starlight/props';
+import Default from '@astrojs/starlight/components/Hero.astro';
+
+const isHomepage = Astro.url.pathname === '/' || Astro.url.pathname === '';
+---
+
+<Default {...Astro.props}><slot /></Default>
+
+{isHomepage && (
+  <>
+    <div class="download-modal-backdrop" id="download-backdrop"></div>
+    <div class="download-modal" id="download-modal">
+      <div class="download-modal-header">
+        <h2>Download Coords</h2>
+        <button class="download-modal-close" id="download-close" aria-label="Close">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <ul class="download-list">
+        <li>
+          <span class="platform-name">iOS</span>
+          <a href="https://testflight.apple.com/join/e2DQGWDB" target="_blank" rel="noopener">
+            <img src="/testflight-badge.png" alt="Download on TestFlight" />
+          </a>
+        </li>
+        <li>
+          <span class="platform-name">Android</span>
+          <span class="coming-soon">Coming soon</span>
+        </li>
+      </ul>
+    </div>
+  </>
+)}
+
+<script>
+  function setupDownloadModal() {
+    const modal = document.getElementById('download-modal');
+    const backdrop = document.getElementById('download-backdrop');
+    const closeBtn = document.getElementById('download-close');
+
+    // Find the Download button in hero actions
+    const downloadBtn = document.querySelector('.hero .actions a[href="#download"]');
+
+    if (!modal || !backdrop || !downloadBtn) return;
+
+    function openModal(e: Event) {
+      e.preventDefault();
+      modal.classList.add('open');
+      backdrop.classList.add('open');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeModal() {
+      modal.classList.remove('open');
+      backdrop.classList.remove('open');
+      document.body.style.overflow = '';
+    }
+
+    downloadBtn.addEventListener('click', openModal);
+    closeBtn?.addEventListener('click', closeModal);
+    backdrop.addEventListener('click', closeModal);
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && modal.classList.contains('open')) {
+        closeModal();
+      }
+    });
+  }
+
+  setupDownloadModal();
+  document.addEventListener('astro:page-load', setupDownloadModal);
+</script>
+
+<style>
+  .download-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s, visibility 0.2s;
+    z-index: 100;
+  }
+
+  .download-modal-backdrop.open {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  .download-modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.95);
+    background: var(--sl-color-bg);
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 1rem;
+    padding: 1.5rem;
+    min-width: 320px;
+    max-width: 90vw;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s, visibility 0.2s, transform 0.2s;
+    z-index: 101;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  }
+
+  .download-modal.open {
+    opacity: 1;
+    visibility: visible;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  .download-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+  }
+
+  .download-modal-header h2 {
+    margin: 0;
+    font-size: 1.25rem;
+  }
+
+  .download-modal-close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0.25rem;
+    color: var(--sl-color-gray-3);
+    transition: color 0.2s;
+  }
+
+  .download-modal-close:hover {
+    color: var(--sl-color-white);
+  }
+
+  .download-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .download-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 0;
+    border-bottom: 1px solid var(--sl-color-gray-5);
+  }
+
+  .download-list li:last-child {
+    border-bottom: none;
+  }
+
+  .platform-name {
+    font-weight: 600;
+    font-size: 1.1rem;
+  }
+
+  .download-list a {
+    transition: opacity 0.2s;
+  }
+
+  .download-list a:hover {
+    opacity: 0.8;
+  }
+
+  .download-list img {
+    height: 40px;
+    width: auto;
+  }
+
+  .coming-soon {
+    color: var(--sl-color-gray-3);
+    font-style: italic;
+  }
+</style>

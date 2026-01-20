@@ -1,6 +1,7 @@
-# Coords Clients
-
-## Overview
+---
+title: Client Architecture
+description: iOS and Android client implementation details
+---
 
 Native iOS and Android clients for the Coords location-sharing service. Clients handle all cryptographic operations—the server is an untrusted relay.
 
@@ -16,13 +17,13 @@ Native iOS and Android clients for the Coords location-sharing service. Clients 
 
 **Platform responsibilities:**
 
-| Rust Core | Native Shell |
-|-----------|--------------|
-| Ed25519/X25519 crypto | Secure key storage (Keychain/Keystore) |
-| AES-256-GCM encryption | Location services |
-| Blob encode/decode | Background task scheduling |
-| Friend/cache persistence | HTTP transport (background URLSession/WorkManager) |
-| Link generation/parsing | UI |
+| Rust Core                | Native Shell                                       |
+|--------------------------|---------------------------------------------------|
+| Ed25519/X25519 crypto    | Secure key storage (Keychain/Keystore)            |
+| AES-256-GCM encryption   | Location services                                 |
+| Blob encode/decode       | Background task scheduling                        |
+| Friend/cache persistence | HTTP transport (background URLSession/WorkManager)|
+| Link generation/parsing  | UI                                                |
 
 ## Architecture
 
@@ -47,25 +48,25 @@ Native iOS and Android clients for the Coords location-sharing service. Clients 
 └────┬────┘      └────┬────┘      └────┬────┘      └────┬────┘
      │                │                │                │
      │ lat/long/alt   │                │                │
-     ├──────────────►│                │                │
+     ├───────────────>│                │                │
      │                │                │                │
      │                │ load_privkey() │                │
-     │                │◄──────────────┤                │
+     │                │<───────────────┤                │
      │                │                │                │
      │                │ encrypt +      │                │
      │                │ sign           │                │
      │                │                │                │
      │                │ PreparedRequest│                │
-     │                ├──────────────►│                │
+     │                ├───────────────>│                │
      │                │                │                │
      │                │                │  PUT /location │
-     │                │                ├──────────────►│
+     │                │                ├───────────────>│
      │                │                │                │
      │                │                │      204       │
-     │                │                │◄──────────────┤
+     │                │                │<───────────────┤
      │                │                │                │
      │                │ update cache   │                │
-     │                │◄──────────────┤                │
+     │                │<───────────────┤                │
      │                │                │                │
 ```
 
@@ -78,29 +79,29 @@ Native iOS and Android clients for the Coords location-sharing service. Clients 
 └────┬────┘      └────┬────┘      └────┬────┘      └────┬────┘
      │                │                │                │
      │ refresh()      │                │                │
-     ├──────────────►│                │                │
+     ├───────────────>│                │                │
      │                │                │                │
      │                │ list_friends() │                │
      │                │ group by server│                │
      │                │                │                │
      │                │ PreparedRequest│                │
      │                │ per server     │                │
-     │                ├──────────────►│                │
+     │                ├───────────────>│                │
      │                │                │                │
      │                │                │ POST /location │
-     │                │                ├──────────────►│
+     │                │                ├───────────────>│
      │                │                │   (parallel)   │
      │                │                │                │
      │                │                │  responses     │
-     │                │                │◄──────────────┤
+     │                │                │<───────────────┤
      │                │                │                │
      │                │ decrypt blobs  │                │
-     │                │◄──────────────┤                │
+     │                │<───────────────┤                │
      │                │                │                │
      │                │ update cache   │                │
      │                │                │                │
      │ locations      │                │                │
-     │◄──────────────┤                │                │
+     │<───────────────┤                │                │
      │                │                │                │
 ```
 
@@ -119,10 +120,10 @@ Native iOS and Android clients for the Coords location-sharing service. Clients 
 
 ```rust
 struct Location {
-    lat: i32,           // microdegrees (~11cm precision)
-    long: i32,          // microdegrees
-    alt: i16,           // meters
-    accuracy: u16,      // meters
+    latitude: f64,      // degrees (converted to microdegrees for wire format)
+    longitude: f64,     // degrees
+    altitude: f64,      // meters (converted to i16 for wire format)
+    accuracy: f32,      // meters (converted to u16 for wire format)
     timestamp: u64,     // ms since epoch
 }
 
@@ -260,20 +261,7 @@ Acceptable tradeoff for 15-minute update interval.
 
 ## Friend Exchange
 
-### Link Format
-
-```
-coord://<server>/add/<pubkey>#<name>
-```
-
-- `server`: User's server URL (host only, HTTPS assumed)
-- `pubkey`: Base64url-encoded Ed25519 public key
-- `name`: Display name (URL-encoded, in fragment so server never sees it)
-
-Example:
-```
-coord://relay.example.com/add/dGhpcyBpcyBhIHB1YmtleQ#Alice
-```
+Links use the `coord://` URI scheme. See [Protocol](/docs/protocol#link-format) for the format specification.
 
 ### In-Person Flow (QR)
 

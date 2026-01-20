@@ -9,7 +9,9 @@ use rand::rngs::OsRng;
 use std::collections::HashMap;
 
 /// Blob format version for future compatibility
-const BLOB_VERSION: u8 = 0x02;
+/// v2: JSON-encoded location
+/// v3: Binary-encoded location (20 bytes)
+const BLOB_VERSION: u8 = 0x03;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -55,8 +57,77 @@ pub fn get_licenses() -> Vec<LicenseGroup> {
 pub struct Location {
     pub latitude: f64,
     pub longitude: f64,
+    #[serde(default)]
+    pub altitude: f64,
     pub accuracy: f32,
     pub timestamp: u64,
+}
+
+// =============================================================================
+// Wire Format Conversion Utilities
+// =============================================================================
+
+/// Convert degrees to microdegrees (i32)
+/// 1 microdegree ≈ 11cm at the equator
+fn degrees_to_micro(degrees: f64) -> i32 {
+    (degrees * 1_000_000.0).round() as i32
+}
+
+/// Convert microdegrees (i32) to degrees
+fn micro_to_degrees(micro: i32) -> f64 {
+    micro as f64 / 1_000_000.0
+}
+
+/// Wire format for location (20 bytes total)
+/// All integers are big-endian
+struct WireLocation {
+    lat_micro: i32,   // 4 bytes - microdegrees
+    long_micro: i32,  // 4 bytes - microdegrees
+    alt: i16,         // 2 bytes - meters
+    accuracy: u16,    // 2 bytes - meters
+    timestamp: u64,   // 8 bytes - ms since epoch
+}
+
+impl WireLocation {
+    fn from_location(loc: &Location) -> Self {
+        Self {
+            lat_micro: degrees_to_micro(loc.latitude),
+            long_micro: degrees_to_micro(loc.longitude),
+            alt: loc.altitude.clamp(-32768.0, 32767.0) as i16,
+            accuracy: (loc.accuracy as u32).min(65535) as u16,
+            timestamp: loc.timestamp,
+        }
+    }
+
+    fn to_location(&self) -> Location {
+        Location {
+            latitude: micro_to_degrees(self.lat_micro),
+            longitude: micro_to_degrees(self.long_micro),
+            altitude: self.alt as f64,
+            accuracy: self.accuracy as f32,
+            timestamp: self.timestamp,
+        }
+    }
+
+    fn encode(&self) -> [u8; 20] {
+        let mut buf = [0u8; 20];
+        buf[0..4].copy_from_slice(&self.lat_micro.to_be_bytes());
+        buf[4..8].copy_from_slice(&self.long_micro.to_be_bytes());
+        buf[8..10].copy_from_slice(&self.alt.to_be_bytes());
+        buf[10..12].copy_from_slice(&self.accuracy.to_be_bytes());
+        buf[12..20].copy_from_slice(&self.timestamp.to_be_bytes());
+        buf
+    }
+
+    fn decode(buf: &[u8; 20]) -> Self {
+        Self {
+            lat_micro: i32::from_be_bytes([buf[0], buf[1], buf[2], buf[3]]),
+            long_micro: i32::from_be_bytes([buf[4], buf[5], buf[6], buf[7]]),
+            alt: i16::from_be_bytes([buf[8], buf[9]]),
+            accuracy: u16::from_be_bytes([buf[10], buf[11]]),
+            timestamp: u64::from_be_bytes([buf[12], buf[13], buf[14], buf[15], buf[16], buf[17], buf[18], buf[19]]),
+        }
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, uniffi::Record)]
@@ -229,6 +300,7 @@ pub fn encrypt_location(location: Location, shared_secret: Vec<u8>) -> Result<Ve
     let plaintext = serde_json::to_vec(&LocationJson {
         latitude: location.latitude,
         longitude: location.longitude,
+        altitude: location.altitude,
         accuracy: location.accuracy,
         timestamp: location.timestamp,
     })
@@ -282,16 +354,19 @@ pub fn decrypt_location(
     Ok(Some(Location {
         latitude: json.latitude,
         longitude: json.longitude,
+        altitude: json.altitude,
         accuracy: json.accuracy,
         timestamp: json.timestamp,
     }))
 }
 
-// Internal JSON representation for serialization
+// Internal JSON representation for legacy single-recipient encryption
 #[derive(serde::Serialize, serde::Deserialize)]
 struct LocationJson {
     latitude: f64,
     longitude: f64,
+    #[serde(default)]
+    altitude: f64,
     accuracy: f32,
     timestamp: u64,
 }
@@ -341,14 +416,9 @@ fn create_encrypted_blob(
     let mut dek = [0u8; 32];
     rand::RngCore::fill_bytes(&mut OsRng, &mut dek);
 
-    // Serialize location
-    let plaintext = serde_json::to_vec(&LocationJson {
-        latitude: location.latitude,
-        longitude: location.longitude,
-        accuracy: location.accuracy,
-        timestamp: location.timestamp,
-    })
-    .map_err(|_| CoreError::InvalidData)?;
+    // Encode location to binary wire format (20 bytes)
+    let wire_location = WireLocation::from_location(location);
+    let plaintext = wire_location.encode();
 
     // Encrypt location with DEK
     let data_cipher = Aes256Gcm::new_from_slice(&dek).map_err(|_| CoreError::InvalidKey)?;
@@ -574,15 +644,14 @@ pub fn decrypt_blob(identity: &Identity, blob: Vec<u8>) -> Result<Location, Core
         .decrypt(nonce, ciphertext)
         .map_err(|_| CoreError::DecryptionFailed)?;
 
-    // Deserialize location
-    let json: LocationJson = serde_json::from_slice(&plaintext).map_err(|_| CoreError::InvalidData)?;
+    // Decode binary wire format (20 bytes)
+    if plaintext.len() != 20 {
+        return Err(CoreError::InvalidData);
+    }
+    let wire_bytes: [u8; 20] = plaintext.try_into().map_err(|_| CoreError::InvalidData)?;
+    let wire_location = WireLocation::decode(&wire_bytes);
 
-    Ok(Location {
-        latitude: json.latitude,
-        longitude: json.longitude,
-        accuracy: json.accuracy,
-        timestamp: json.timestamp,
-    })
+    Ok(wire_location.to_location())
 }
 
 /// Result of fetching a friend's location
@@ -902,31 +971,33 @@ pub fn mock_friends() -> Vec<Friend> {
         .unwrap()
         .as_millis() as u64;
 
+    // (pubkey, name, Option<(lat, lng, alt, acc, ts_offset, fetch_offset)>)
     let mock_data = [
-        ("abc123", "Alice", Some((37.7749, -122.4194, 10.0, 300_000, 60_000))),
-        ("def456", "Bob", Some((37.7849, -122.4094, 25.0, 3_600_000, 120_000))),
+        ("abc123", "Alice", Some((37.7749, -122.4194, 50.0, 10.0, 300_000, 60_000))),
+        ("def456", "Bob", Some((37.7849, -122.4094, 25.0, 25.0, 3_600_000, 120_000))),
         ("ghi789", "Charlie", None),
-        ("jkl012", "Diana", Some((37.7649, -122.4294, 15.0, 1_800_000, 180_000))),
-        ("mno345", "Evan", Some((37.7949, -122.3994, 50.0, 7_200_000, 300_000))),
-        ("pqr678", "Fiona", Some((37.7549, -122.4394, 8.0, 120_000, 30_000))),
-        ("stu901", "George", Some((37.8049, -122.4094, 100.0, 86_400_000, 600_000))),
-        ("vwx234", "Hannah", Some((37.7699, -122.4494, 20.0, 900_000, 90_000))),
-        ("yza567", "Ivan", Some((37.7599, -122.3894, 12.0, 600_000, 45_000))),
-        ("bcd890", "Julia", Some((37.7899, -122.4594, 30.0, 2_700_000, 150_000))),
+        ("jkl012", "Diana", Some((37.7649, -122.4294, 100.0, 15.0, 1_800_000, 180_000))),
+        ("mno345", "Evan", Some((37.7949, -122.3994, 75.0, 50.0, 7_200_000, 300_000))),
+        ("pqr678", "Fiona", Some((37.7549, -122.4394, 10.0, 8.0, 120_000, 30_000))),
+        ("stu901", "George", Some((37.8049, -122.4094, 200.0, 100.0, 86_400_000, 600_000))),
+        ("vwx234", "Hannah", Some((37.7699, -122.4494, 30.0, 20.0, 900_000, 90_000))),
+        ("yza567", "Ivan", Some((37.7599, -122.3894, 45.0, 12.0, 600_000, 45_000))),
+        ("bcd890", "Julia", Some((37.7899, -122.4594, 60.0, 30.0, 2_700_000, 150_000))),
         ("efg123", "Kevin", None),
-        ("hij456", "Laura", Some((37.7749, -122.4294, 18.0, 450_000, 75_000))),
+        ("hij456", "Laura", Some((37.7749, -122.4294, 80.0, 18.0, 450_000, 75_000))),
     ];
 
     mock_data
         .into_iter()
         .map(|(pubkey, name, loc_data)| {
-            let location = loc_data.map(|(lat, lng, acc, ts_offset, _)| Location {
+            let location = loc_data.map(|(lat, lng, alt, acc, ts_offset, _)| Location {
                 latitude: lat,
                 longitude: lng,
+                altitude: alt,
                 accuracy: acc as f32,
                 timestamp: now - ts_offset,
             });
-            let fetched_at = loc_data.map(|(_, _, _, _, fetch_offset)| now - fetch_offset);
+            let fetched_at = loc_data.map(|(_, _, _, _, _, fetch_offset)| now - fetch_offset);
 
             Friend {
                 pubkey: pubkey.to_string(),
@@ -1075,6 +1146,7 @@ mod tests {
         let location = Location {
             latitude: 37.7749,
             longitude: -122.4194,
+            altitude: 50.0,
             accuracy: 10.0,
             timestamp: 1234567890,
         };
@@ -1100,6 +1172,7 @@ mod tests {
         let location = Location {
             latitude: 40.7128,
             longitude: -74.0060,
+            altitude: 10.0,
             accuracy: 15.0,
             timestamp: 9876543210,
         };
@@ -1126,6 +1199,7 @@ mod tests {
         let location = Location {
             latitude: 51.5074,
             longitude: -0.1278,
+            altitude: 25.0,
             accuracy: 20.0,
             timestamp: 1111111111,
         };
@@ -1237,6 +1311,7 @@ mod tests {
         let location = Location {
             latitude: 37.7749,
             longitude: -122.4194,
+            altitude: 0.0,
             accuracy: 10.0,
             timestamp: 1000, // Older than LAST_UPLOADED_TIMESTAMP
         };
@@ -1312,6 +1387,7 @@ mod tests {
         let location = Location {
             latitude: 37.7749,
             longitude: -122.4194,
+            altitude: 100.0,
             accuracy: 10.0,
             timestamp: 1234567890,
         };
@@ -1328,11 +1404,50 @@ mod tests {
     }
 
     #[test]
+    fn test_wire_format_roundtrip() {
+        let location = Location {
+            latitude: 37.7749295,  // 7 decimal places
+            longitude: -122.4194155,
+            altitude: 123.0,
+            accuracy: 15.5,
+            timestamp: 1234567890123,
+        };
+
+        let wire = WireLocation::from_location(&location);
+        let decoded = wire.to_location();
+
+        // Microdegrees gives ~11cm precision, so 6 decimal places should match
+        assert!((decoded.latitude - 37.774929).abs() < 0.000001);
+        assert!((decoded.longitude - (-122.419415)).abs() < 0.000001);
+        assert_eq!(decoded.altitude, 123.0);
+        assert_eq!(decoded.accuracy, 15.0); // u16 truncates fractional part
+        assert_eq!(decoded.timestamp, location.timestamp);
+    }
+
+    #[test]
+    fn test_wire_format_binary_size() {
+        let location = Location {
+            latitude: 0.0,
+            longitude: 0.0,
+            altitude: 0.0,
+            accuracy: 0.0,
+            timestamp: 0,
+        };
+
+        let wire = WireLocation::from_location(&location);
+        let encoded = wire.encode();
+
+        // Wire format should be exactly 20 bytes
+        assert_eq!(encoded.len(), 20);
+    }
+
+    #[test]
     fn test_blob_padding_applied() {
         let identity = generate_identity();
         let location = Location {
             latitude: 37.7749,
             longitude: -122.4194,
+            altitude: 50.0,
             accuracy: 10.0,
             timestamp: 1234567890,
         };

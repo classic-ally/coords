@@ -92,6 +92,7 @@ class LocationSyncService {
             let uploadResult = await uploadLocation(
                 latitude: location.coordinate.latitude,
                 longitude: location.coordinate.longitude,
+                altitude: location.altitude,
                 accuracy: Float(location.horizontalAccuracy),
                 timestamp: UInt64(location.timestamp.timeIntervalSince1970 * 1000)
             )
@@ -108,7 +109,7 @@ class LocationSyncService {
 
     // MARK: - Location Upload
 
-    func uploadLocation(latitude: Double, longitude: Double, accuracy: Float, timestamp: UInt64) async -> UploadResult {
+    func uploadLocation(latitude: Double, longitude: Double, altitude: Double, accuracy: Float, timestamp: UInt64) async -> UploadResult {
         guard let identity = identityStore.getIdentity() else {
             return .error("No identity configured")
         }
@@ -118,6 +119,7 @@ class LocationSyncService {
         let location = Location(
             latitude: latitude,
             longitude: longitude,
+            altitude: altitude,
             accuracy: accuracy,
             timestamp: timestamp
         )

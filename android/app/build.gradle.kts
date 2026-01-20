@@ -89,17 +89,14 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
 
-// Rust cross-compilation for Android
-val rustTargets = mapOf(
-    "arm64-v8a" to "aarch64-linux-android",
-    "armeabi-v7a" to "armv7-linux-androideabi",
-    "x86_64" to "x86_64-linux-android",
-    "x86" to "i686-linux-android"
-)
-
+// Rust cross-compilation for Android using cargo-ndk
 // Only build arm64-v8a by default for faster builds; set BUILD_ALL_ABIS=true for release
 val buildAllAbis = System.getenv("BUILD_ALL_ABIS")?.toBoolean() ?: false
-val targetAbis = if (buildAllAbis) rustTargets.keys else setOf("arm64-v8a")
+val targetAbis = if (buildAllAbis) {
+    listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
+} else {
+    listOf("arm64-v8a")
+}
 
 tasks.register("buildRustLibrary") {
     description = "Build Rust transponder-core library for Android"
@@ -112,28 +109,18 @@ tasks.register("buildRustLibrary") {
     outputs.dir(jniLibsDir)
 
     doLast {
-        targetAbis.forEach { abi ->
-            val rustTarget = rustTargets[abi] ?: error("Unknown ABI: $abi")
+        println("Building transponder-core for Android targets: $targetAbis")
 
-            println("Building transponder-core for $abi ($rustTarget)...")
-
-            exec {
-                workingDir = rootProject.projectDir.parentFile
-                commandLine(
-                    "/run/current-system/sw/bin/nix-shell", "-p", "rustup", "--run",
-                    "rustup run stable cargo build --release --target $rustTarget -p transponder-core"
-                )
-            }
-
-            val soFile = rootProject.projectDir.parentFile
-                .resolve("target/$rustTarget/release/libtransponder_core.so")
-            val destDir = jniLibsDir.resolve(abi)
-
-            destDir.mkdirs()
-            soFile.copyTo(destDir.resolve("libtransponder_core.so"), overwrite = true)
-
-            println("Copied $soFile to $destDir")
+        exec {
+            workingDir = rootProject.projectDir.parentFile
+            val targetArgs = targetAbis.flatMap { listOf("-t", it) }
+            commandLine(
+                listOf("cargo", "ndk") + targetArgs +
+                listOf("-o", jniLibsDir.absolutePath, "build", "--release", "-p", "transponder-core")
+            )
         }
+
+        println("Built native libraries in $jniLibsDir")
     }
 }
 
@@ -150,25 +137,31 @@ tasks.register("generateBindings") {
     doLast {
         println("Building host library for binding generation...")
 
-        // Build release library for host (macOS) to generate bindings from
+        // Build release library for host to generate bindings from
         exec {
             workingDir = rootProject.projectDir.parentFile
-            commandLine(
-                "/run/current-system/sw/bin/nix-shell", "-p", "rustup", "--run",
-                "rustup run stable cargo build --release -p transponder-core"
-            )
+            commandLine("cargo", "build", "--release", "-p", "transponder-core")
         }
 
         println("Generating Kotlin bindings...")
 
+        // Detect library extension based on host OS
+        val libExt = when {
+            System.getProperty("os.name").lowercase().contains("mac") -> "dylib"
+            System.getProperty("os.name").lowercase().contains("win") -> "dll"
+            else -> "so"
+        }
+
         exec {
             workingDir = rootProject.projectDir.parentFile
             commandLine(
-                "/run/current-system/sw/bin/nix-shell", "-p", "rustup", "--run",
-                "cargo run --manifest-path core/Cargo.toml --bin uniffi-bindgen generate " +
-                "--library target/release/libtransponder_core.dylib " +
-                "--language kotlin " +
-                "--out-dir android/app/src/main/java"
+                "cargo", "run",
+                "--manifest-path", "core/Cargo.toml",
+                "--bin", "uniffi-bindgen",
+                "generate",
+                "--library", "target/release/libtransponder_core.$libExt",
+                "--language", "kotlin",
+                "--out-dir", "android/app/src/main/java"
             )
         }
 

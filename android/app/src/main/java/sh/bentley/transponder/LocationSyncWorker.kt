@@ -149,6 +149,7 @@ class LocationSyncWorker(
         val result = syncService.uploadLocation(
             latitude = location.latitude,
             longitude = location.longitude,
+            altitude = location.altitude,
             accuracy = location.accuracy,
             timestamp = location.time
         )
