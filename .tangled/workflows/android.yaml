@@ -9,6 +9,9 @@ dependencies:
     - findutils
     - gnused
     - gcc
+    - openssh
+    - rsync
+    - tailscale
   git+https://tangled.org/bentley.sh/coords:
     - android-toolchain
 
@@ -20,6 +23,13 @@ environment:
   BUILD_ALL_ABIS: "true"
 
 steps:
+  - name: Connect to tailnet
+    command: |
+      tailscaled --state=/tmp/tailscale.state &
+      sleep 2
+      tailscale up --authkey "$TAILSCALE_KEY" --login-server https://ctrl.bentley.sh --hostname "ci-$$"
+      tailscale status
+
   - name: Decode keystore
     command: |
       echo "$KEYSTORE_BASE64" | base64 -d > /tmp/release.keystore
@@ -34,3 +44,18 @@ steps:
       ./gradlew assembleRelease --no-daemon
     environment:
       KEYSTORE_PATH: /tmp/release.keystore
+
+  - name: Upload APKs to staging
+    command: |
+      mkdir -p ~/.ssh
+      echo "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+      chmod 600 ~/.ssh/deploy_key
+
+      # Add server to known hosts via tailnet
+      ssh-keyscan -H coord >> ~/.ssh/known_hosts 2>/dev/null
+
+      # Upload APKs to staging with today's date
+      TODAY=$(date +%Y-%m-%d)
+      rsync -avz -e "ssh -i ~/.ssh/deploy_key" \
+        android/app/build/outputs/apk/release/*.apk \
+        deploy@coord:/var/lib/coords/staging/$TODAY/
