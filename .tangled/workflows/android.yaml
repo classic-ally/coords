@@ -12,6 +12,8 @@ dependencies:
     - openssh
     - rsync
     - tailscale
+    - netcat
+    - gnugrep
   git+https://tangled.org/bentley.sh/coords:
     - android-toolchain
 
@@ -25,10 +27,11 @@ environment:
 steps:
   - name: Connect to tailnet
     command: |
-      tailscaled --state=/tmp/tailscale.state &
-      sleep 2
-      tailscale up --authkey "$TAILSCALE_KEY" --login-server https://ctrl.bentley.sh --hostname "ci-$$"
-      tailscale status
+      tailscaled --tun=userspace-networking --socks5-server=localhost:1055 --state=/tmp/tailscale.state &
+      sleep 3
+      tailscale up --authkey "$TAILSCALE_KEY" --login-server https://ctrl.bentley.sh --hostname "ci-$$" || { echo "tailscale up failed"; exit 1; }
+      tailscale status | head -1 || { echo "tailscale status failed"; exit 1; }
+      echo "Connected to tailnet"
 
   - name: Decode keystore
     command: |
@@ -47,15 +50,15 @@ steps:
 
   - name: Upload APKs to staging
     command: |
+      # Create minimal passwd entry for container
+      echo "root:x:0:0:root:/root:/bin/sh" >> /etc/passwd
+
       mkdir -p ~/.ssh
       echo "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
       chmod 600 ~/.ssh/deploy_key
 
-      # Add server to known hosts via tailnet
-      ssh-keyscan -H coord >> ~/.ssh/known_hosts 2>/dev/null
-
       # Upload APKs to staging with today's date
       TODAY=$(date +%Y-%m-%d)
-      rsync -avz -e "ssh -i ~/.ssh/deploy_key" \
+      rsync -avz -e "ssh -o StrictHostKeyChecking=accept-new -o ProxyCommand='nc -x 127.0.0.1:1055 %h %p' -i ~/.ssh/deploy_key" \
         android/app/build/outputs/apk/release/*.apk \
         deploy@coord:/var/lib/coords/staging/$TODAY/
