@@ -5,6 +5,17 @@
 # For more details, see
 #   http://developer.android.com/guide/developing/tools/proguard.html
 
+# JNA - required for UniFFI native bindings
+# JNA uses reflection to find native methods
+-dontwarn java.awt.*
+-keep class com.sun.jna.** { *; }
+-keep class * implements com.sun.jna.** { *; }
+-keepclassmembers class * extends com.sun.jna.** { public *; }
+
+# UniFFI generated bindings
+-keep class uniffi.** { *; }
+-keepclassmembers class uniffi.** { *; }
+
 # If your project uses WebView with JS, uncomment the following
 # and specify the fully qualified class name to the JavaScript interface
 # class:
