@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="-30 -30 60 72">
+    <!-- Pin body (circle + triangle) -->
+    <path fill="#FFFFFF" d="M0,-24 C-13.2,-24 -24,-13.2 -24,0 C-24,13.2 0,36 0,36 C0,36 24,13.2 24,0 C24,-13.2 13.2,-24 0,-24 Z" />
+    <!-- Inner circle (cutout effect) -->
+    <path fill="#54bef0" d="M0,-8 C-4.4,-8 -8,-4.4 -8,0 C-8,4.4 -4.4,8 0,8 C4.4,8 8,4.4 8,0 C8,-4.4 4.4,-8 0,-8 Z" />
+</svg>
