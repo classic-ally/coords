@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.ImageFormat
 import android.util.Size
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
@@ -59,6 +60,15 @@ fun AddFriendScreen(
     var role by remember { mutableStateOf(ExchangeRole.SCAN_FIRST) }
     var currentStep by remember { mutableIntStateOf(0) }
     var addedFriendName by remember { mutableStateOf<String?>(null) }
+
+    BackHandler {
+        if (currentStep > 0) {
+            currentStep = 0
+            addedFriendName = null
+        } else {
+            onDismiss()
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -569,6 +579,8 @@ fun ShareBackScreen(
     friendName: String,
     onDismiss: () -> Unit
 ) {
+    BackHandler { onDismiss() }
+
     val qrBitmap = remember(identityStore) {
         val identity = identityStore.getIdentity() ?: return@remember null
         val serverUrl = identityStore.serverUrl ?: return@remember null

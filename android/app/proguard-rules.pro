@@ -5,6 +5,9 @@
 # For more details, see
 #   http://developer.android.com/guide/developing/tools/proguard.html
 
+# AndroidX test references error-prone annotations not included at runtime
+-dontwarn com.google.errorprone.annotations.**
+
 # JNA - required for UniFFI native bindings
 # JNA uses reflection to find native methods
 -dontwarn java.awt.*

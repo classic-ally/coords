@@ -44,6 +44,7 @@ android {
     buildTypes {
         debug {
             applicationIdSuffix = ".dev"
+            resValue("string", "app_name", "Coords Dev")
             buildConfigField("Boolean", "USE_MOCK_FRIENDS", "true")
             // Temporarily test minification
             isMinifyEnabled = true
@@ -54,6 +55,7 @@ android {
             )
         }
         release {
+            resValue("string", "app_name", "Coords")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(

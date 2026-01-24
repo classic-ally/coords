@@ -183,6 +183,7 @@
         default = pkgs.mkShell {
           buildInputs = [
             android-toolchain
+            pkgs.android-studio
             pkgs.rust-analyzer
             pkgs.nodejs_24
             pkgs.git

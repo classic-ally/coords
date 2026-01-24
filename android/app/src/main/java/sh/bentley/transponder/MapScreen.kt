@@ -306,6 +306,11 @@ fun MainScreen(
     var isEditMode by remember { mutableStateOf(false) }
     var friendToDelete by remember { mutableStateOf<Friend?>(null) }
     var showDeleteConfirmation by remember { mutableStateOf(false) }
+
+    // Exit edit mode on back press
+    BackHandler(enabled = isEditMode) {
+        isEditMode = false
+    }
     var myName by remember { mutableStateOf(identityStore.displayName ?: "Me") }
 
     // Check if auto-share should be enabled (requires both setting AND permission)
