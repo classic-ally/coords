@@ -33,8 +33,8 @@ android {
         applicationId = "sh.bentley.transponder"
         minSdk = 31
         targetSdk = 36
-        versionCode = 3
-        versionName = "0.8.2"
+        versionCode = System.getenv("VERSION_CODE")?.toIntOrNull() ?: 1
+        versionName = System.getenv("VERSION_NAME") ?: "dev"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -43,6 +43,7 @@ android {
 
     buildTypes {
         debug {
+            applicationIdSuffix = ".dev"
             buildConfigField("Boolean", "USE_MOCK_FRIENDS", "true")
             // Temporarily test minification
             isMinifyEnabled = true

@@ -40,6 +40,8 @@ steps:
 
   - name: Build signed APK
     command: |
+      export VERSION_NAME=$(date +%Y.%-m.%-d)
+      export VERSION_CODE=$(date +%Y%m%d)
       cd android
       # Use SDK's AAPT2 (Nix-patched) instead of Gradle's downloaded one
       echo "" >> gradle.properties
