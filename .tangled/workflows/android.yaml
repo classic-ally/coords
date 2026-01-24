@@ -25,6 +25,21 @@ environment:
   BUILD_ALL_ABIS: "true"
 
 steps:
+  - name: Check for relevant changes
+    command: |
+      # Skip build if no Android-related files changed
+      CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || echo "unknown")
+      if [ "$CHANGED" = "unknown" ]; then
+        echo "Could not determine changes, proceeding with build"
+      elif echo "$CHANGED" | grep -qE '^(android/|core/|\.tangled/workflows/android\.yaml|flake\.(nix|lock))'; then
+        echo "Relevant changes detected:"
+        echo "$CHANGED" | grep -E '^(android/|core/|\.tangled/workflows/android\.yaml|flake\.(nix|lock))'
+      else
+        echo "No Android-related changes, skipping build"
+        echo "Changed files: $CHANGED"
+        exit 0
+      fi
+
   - name: Connect to tailnet
     command: |
       tailscaled --tun=userspace-networking --socks5-server=localhost:1055 --state=/tmp/tailscale.state &
