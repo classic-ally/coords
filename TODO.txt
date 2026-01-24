@@ -1,0 +1,13 @@
+- need to make clicked link open friend page if you've already added this friend
+  - when we add a friend, check if their location is decryptable before showing the QR/share link dialogue; we can infer the pairing is completed already if we can decrypt it
+
+- restrict geocoding to show results from your current territory (aylmer, QC problem when in suburban ottawa, ON)
+
+- ensure we reset the map zoom coordinates when we add a friend to include the new friend
+
+- completing the add friends flow with Done should suppress the profile card/any friends card and return us to the main screen so we can see new friend addition
+
+- editing friend name crashes swiftui bottom view on the iOS client - works on profile name
+
+- android back button fixes, scan their QR -> swipe back kills app when it should either go back through flow (if on step 2) or go back to map view (if on step 1)
+

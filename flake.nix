@@ -7,9 +7,13 @@
       url = "github:nix-community/fenix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    agenix = {
+      url = "github:ryantm/agenix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs = { self, nixpkgs, fenix }:
+  outputs = { self, nixpkgs, fenix, agenix }:
   let
     systems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
     forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f system);
@@ -193,5 +197,15 @@
         };
       }
     );
+
+    nixosConfigurations.coord = nixpkgs.lib.nixosSystem {
+      system = "x86_64-linux";
+      specialArgs = { coords = self; };
+      modules = [
+        agenix.nixosModules.default
+        self.nixosModules.default
+        ./deploy/coord.is/configuration.nix
+      ];
+    };
   };
 }
