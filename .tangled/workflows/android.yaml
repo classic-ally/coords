@@ -52,14 +52,13 @@ steps:
     command: |
       # Create minimal passwd entry for container
       echo "root:x:0:0:root:/root:/bin/sh" >> /etc/passwd
-      mkdir -p /root
+      mkdir -p /root/.ssh
 
-      mkdir -p ~/.ssh
-      echo "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
-      chmod 600 ~/.ssh/deploy_key
+      echo "$DEPLOY_SSH_KEY" > /root/.ssh/deploy_key
+      chmod 600 /root/.ssh/deploy_key
 
       # Upload APKs to staging with today's date
       TODAY=$(date +%Y-%m-%d)
-      rsync -avz -e "ssh -o StrictHostKeyChecking=accept-new -o ProxyCommand='nc -x 127.0.0.1:1055 %h %p' -i ~/.ssh/deploy_key" \
+      rsync -avz -e "ssh -o StrictHostKeyChecking=accept-new -o ProxyCommand='nc -x 127.0.0.1:1055 %h %p' -i /root/.ssh/deploy_key" \
         android/app/build/outputs/apk/release/*.apk \
         deploy@coord:/var/lib/coords/staging/$TODAY/
