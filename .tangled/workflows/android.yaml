@@ -52,6 +52,7 @@ steps:
     command: |
       # Create minimal passwd entry for container
       echo "root:x:0:0:root:/root:/bin/sh" >> /etc/passwd
+      mkdir -p /root
 
       mkdir -p ~/.ssh
       echo "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
