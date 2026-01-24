@@ -53,6 +53,11 @@ steps:
       echo "$KEYSTORE_BASE64" | base64 -d > /tmp/release.keystore
       echo "Keystore decoded to /tmp/release.keystore"
 
+  - name: Create local.properties
+    command: |
+      echo "MAPTILER_API_KEY=$MAPTILER_API_KEY" > android/local.properties
+      echo "local.properties created with MapTiler API key"
+
   - name: Build signed APK
     command: |
       export VERSION_NAME=$(date +%Y.%-m.%-d)
