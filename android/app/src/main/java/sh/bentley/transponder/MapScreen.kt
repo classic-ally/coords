@@ -311,6 +311,8 @@ fun MainScreen(
     var isEditMode by remember { mutableStateOf(false) }
     var friendToDelete by remember { mutableStateOf<Friend?>(null) }
     var showDeleteConfirmation by remember { mutableStateOf(false) }
+    var showEditFriendNameDialog by remember { mutableStateOf(false) }
+    var showEditProfileNameDialog by remember { mutableStateOf(false) }
 
     // Exit edit mode on back press
     BackHandler(enabled = isEditMode) {
@@ -937,7 +939,7 @@ fun MainScreen(
                                 pendingCameraAction = CameraAction.FitAllFriends
                             },
                             onNameEdit = {
-                                // TODO: implement name editing
+                                showEditProfileNameDialog = true
                             },
                             onEditServerUrl = {
                                 showServerUrlDialog = true
@@ -958,7 +960,7 @@ fun MainScreen(
                                 pendingCameraAction = CameraAction.FitAllFriends
                             },
                             onNameEdit = {
-                                // TODO: implement name editing
+                                showEditFriendNameDialog = true
                             },
                             onToggleShare = {
                                 try {
@@ -1419,6 +1421,42 @@ fun MainScreen(
                         Text("Cancel")
                     }
                 }
+            )
+        }
+
+        // Edit friend name dialog
+        if (showEditFriendNameDialog && selectedFriend != null) {
+            EditNameDialog(
+                currentName = selectedFriend!!.name,
+                onSave = { newName ->
+                    try {
+                        uniffi.transponder_core.updateFriend(
+                            selectedFriend!!.pubkey,
+                            null,
+                            null,
+                            newName
+                        )
+                        // Clear cached marker icon so it regenerates with new initial
+                        markerIconCache.remove(selectedFriend!!.pubkey)
+                        refreshFriends()
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                },
+                onDismiss = { showEditFriendNameDialog = false }
+            )
+        }
+
+        // Edit profile name dialog
+        if (showEditProfileNameDialog) {
+            EditNameDialog(
+                currentName = myName,
+                label = "Your name",
+                onSave = { newName ->
+                    myName = newName
+                    identityStore.displayName = newName
+                },
+                onDismiss = { showEditProfileNameDialog = false }
             )
         }
 
