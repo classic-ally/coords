@@ -115,6 +115,8 @@ import uniffi.transponder_core.getVersion
 import uniffi.transponder_core.listFriends
 import uniffi.transponder_core.getShareRecipients
 import uniffi.transponder_core.mockFriends as coreMockFriends
+import uniffi.transponder_core.findNearestCityInRegion
+import uniffi.transponder_core.City
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -129,6 +131,9 @@ import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.QrCode2
+
+/** Extension to match the old CityDatabase.City.displayName() API */
+fun City.displayName(): String = if (region.isNotEmpty()) "$name, $region" else "$name, $country"
 
 /** Friend with precomputed display data to avoid expensive calculations during scroll */
 private data class FriendDisplayData(
@@ -377,15 +382,6 @@ fun MainScreen(
 
     val locationSyncService = remember { LocationSyncService(identityStore) }
 
-    // Track when city database finishes loading to trigger recomputation
-    var citiesLoaded by remember { mutableStateOf(CityDatabase.isLoaded) }
-    LaunchedEffect(Unit) {
-        while (!CityDatabase.isLoaded) {
-            kotlinx.coroutines.delay(100)
-        }
-        citiesLoaded = true
-    }
-
     // Helper function to refresh friends from storage
     fun refreshFriends() {
         friends = try {
@@ -477,13 +473,13 @@ fun MainScreen(
         }
     }
 
-    // Precompute cities once, recompute only when friends change or cities finish loading
-    val friendsWithCities = remember(friends, citiesLoaded) {
+    // Precompute cities once, recompute only when friends change
+    val friendsWithCities = remember(friends) {
         friends.map { friend ->
             FriendDisplayData(
                 friend = friend,
                 city = friend.location?.let { loc ->
-                    CityDatabase.findNearest(loc.latitude, loc.longitude)
+                    findNearestCityInRegion(loc.latitude, loc.longitude)
                 }
             )
         }
@@ -823,7 +819,7 @@ fun MainScreen(
                                 lng = loc.longitude,
                                 accuracy = currentAccuracy,
                                 timestamp = currentLocationTimestamp ?: System.currentTimeMillis(),
-                                city = if (citiesLoaded) CityDatabase.findNearest(loc.latitude, loc.longitude) else null
+                                city = findNearestCityInRegion(loc.latitude, loc.longitude)
                             )
                         }
                         ProfileContent(
@@ -847,7 +843,7 @@ fun MainScreen(
                                                         lng = loc.longitude,
                                                         accuracy = loc.accuracy,
                                                         timestamp = loc.timestamp.toLong(),
-                                                        city = if (citiesLoaded) CityDatabase.findNearest(loc.latitude, loc.longitude) else null
+                                                        city = findNearestCityInRegion(loc.latitude, loc.longitude)
                                                     )
                                                     showServerLocation = true
                                                 } else {
@@ -926,7 +922,7 @@ fun MainScreen(
                                                 lng = location.longitude,
                                                 accuracy = location.accuracy,
                                                 timestamp = location.time,
-                                                city = if (citiesLoaded) CityDatabase.findNearest(location.latitude, location.longitude) else null
+                                                city = findNearestCityInRegion(location.latitude, location.longitude)
                                             )
                                         }
                                         is LocationSyncService.UploadResult.Error -> {
@@ -1700,7 +1696,7 @@ fun FriendDetailContent(
 
         // Location info
         friend.location?.let { loc ->
-            val city = CityDatabase.findNearest(loc.latitude, loc.longitude)
+            val city = findNearestCityInRegion(loc.latitude, loc.longitude)
             val age = formatAge(loc.timestamp)
             Row(
                 modifier = Modifier

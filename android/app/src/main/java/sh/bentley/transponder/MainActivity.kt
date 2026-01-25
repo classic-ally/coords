@@ -84,11 +84,6 @@ class MainActivity : ComponentActivity() {
             e.printStackTrace()
         }
 
-        // Load city database asynchronously to avoid blocking UI
-        lifecycleScope.launch(Dispatchers.IO) {
-            CityDatabase.load(this@MainActivity)
-        }
-
         identityStore = IdentityStore(this)
 
         // Migrate user's own server URL from old domain to new one

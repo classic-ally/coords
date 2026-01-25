@@ -645,6 +645,12 @@ internal object IntegrityCheckingUniffiLib {
     ): Short
     external fun uniffi_transponder_core_checksum_func_encrypt_location(
     ): Short
+    external fun uniffi_transponder_core_checksum_func_find_nearest_city(
+    ): Short
+    external fun uniffi_transponder_core_checksum_func_find_nearest_city_in_region(
+    ): Short
+    external fun uniffi_transponder_core_checksum_func_find_region(
+    ): Short
     external fun uniffi_transponder_core_checksum_func_generate_friend_link(
     ): Short
     external fun uniffi_transponder_core_checksum_func_generate_identity(
@@ -709,6 +715,12 @@ external fun uniffi_transponder_core_fn_func_decrypt_location(`encrypted`: RustB
 external fun uniffi_transponder_core_fn_func_derive_shared_secret(`myX25519Private`: RustBuffer.ByValue,`theirX25519Public`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 external fun uniffi_transponder_core_fn_func_encrypt_location(`location`: RustBuffer.ByValue,`sharedSecret`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+external fun uniffi_transponder_core_fn_func_find_nearest_city(`lat`: Double,`lng`: Double,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+external fun uniffi_transponder_core_fn_func_find_nearest_city_in_region(`lat`: Double,`lng`: Double,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+external fun uniffi_transponder_core_fn_func_find_region(`lat`: Double,`lng`: Double,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 external fun uniffi_transponder_core_fn_func_generate_friend_link(`identity`: RustBuffer.ByValue,`server`: RustBuffer.ByValue,`name`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
@@ -885,6 +897,15 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_transponder_core_checksum_func_encrypt_location() != 17870.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_transponder_core_checksum_func_find_nearest_city() != 51288.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_transponder_core_checksum_func_find_nearest_city_in_region() != 24478.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_transponder_core_checksum_func_find_region() != 46428.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_transponder_core_checksum_func_generate_friend_link() != 59198.toShort()) {
@@ -1228,6 +1249,65 @@ public object FfiConverterByteArray: FfiConverterRustBuffer<ByteArray> {
     override fun write(value: ByteArray, buf: ByteBuffer) {
         buf.putInt(value.size)
         buf.put(value)
+    }
+}
+
+
+
+/**
+ * City information for reverse geocoding
+ */
+data class City (
+    var `name`: kotlin.String
+    , 
+    var `lat`: kotlin.Double
+    , 
+    var `lng`: kotlin.Double
+    , 
+    var `region`: kotlin.String
+    , 
+    var `country`: kotlin.String
+    , 
+    var `population`: kotlin.UInt
+    
+){
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeCity: FfiConverterRustBuffer<City> {
+    override fun read(buf: ByteBuffer): City {
+        return City(
+            FfiConverterString.read(buf),
+            FfiConverterDouble.read(buf),
+            FfiConverterDouble.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterUInt.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: City) = (
+            FfiConverterString.allocationSize(value.`name`) +
+            FfiConverterDouble.allocationSize(value.`lat`) +
+            FfiConverterDouble.allocationSize(value.`lng`) +
+            FfiConverterString.allocationSize(value.`region`) +
+            FfiConverterString.allocationSize(value.`country`) +
+            FfiConverterUInt.allocationSize(value.`population`)
+    )
+
+    override fun write(value: City, buf: ByteBuffer) {
+            FfiConverterString.write(value.`name`, buf)
+            FfiConverterDouble.write(value.`lat`, buf)
+            FfiConverterDouble.write(value.`lng`, buf)
+            FfiConverterString.write(value.`region`, buf)
+            FfiConverterString.write(value.`country`, buf)
+            FfiConverterUInt.write(value.`population`, buf)
     }
 }
 
@@ -1586,6 +1666,45 @@ public object FfiConverterTypePreparedRequest: FfiConverterRustBuffer<PreparedRe
 
 
 
+/**
+ * Region lookup result
+ */
+data class Region (
+    var `name`: kotlin.String
+    , 
+    var `country`: kotlin.String
+    
+){
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeRegion: FfiConverterRustBuffer<Region> {
+    override fun read(buf: ByteBuffer): Region {
+        return Region(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: Region) = (
+            FfiConverterString.allocationSize(value.`name`) +
+            FfiConverterString.allocationSize(value.`country`)
+    )
+
+    override fun write(value: Region, buf: ByteBuffer) {
+            FfiConverterString.write(value.`name`, buf)
+            FfiConverterString.write(value.`country`, buf)
+    }
+}
+
+
+
 
 
 sealed class CoreException: kotlin.Exception() {
@@ -1865,6 +1984,38 @@ public object FfiConverterOptionalString: FfiConverterRustBuffer<kotlin.String?>
 /**
  * @suppress
  */
+public object FfiConverterOptionalTypeCity: FfiConverterRustBuffer<City?> {
+    override fun read(buf: ByteBuffer): City? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeCity.read(buf)
+    }
+
+    override fun allocationSize(value: City?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeCity.allocationSize(value)
+        }
+    }
+
+    override fun write(value: City?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeCity.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
 public object FfiConverterOptionalTypeLocation: FfiConverterRustBuffer<Location?> {
     override fun read(buf: ByteBuffer): Location? {
         if (buf.get().toInt() == 0) {
@@ -1887,6 +2038,38 @@ public object FfiConverterOptionalTypeLocation: FfiConverterRustBuffer<Location?
         } else {
             buf.put(1)
             FfiConverterTypeLocation.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterOptionalTypeRegion: FfiConverterRustBuffer<Region?> {
+    override fun read(buf: ByteBuffer): Region? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeRegion.read(buf)
+    }
+
+    override fun allocationSize(value: Region?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeRegion.allocationSize(value)
+        }
+    }
+
+    override fun write(value: Region?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeRegion.write(value, buf)
         }
     }
 }
@@ -2150,6 +2333,49 @@ public object FfiConverterMapStringString: FfiConverterRustBuffer<Map<kotlin.Str
     UniffiLib.uniffi_transponder_core_fn_func_encrypt_location(
     
         FfiConverterTypeLocation.lower(`location`),FfiConverterByteArray.lower(`sharedSecret`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Find the nearest city to the given coordinates.
+         * Uses a weighted score that prefers larger cities when distances are similar.
+         */ fun `findNearestCity`(`lat`: kotlin.Double, `lng`: kotlin.Double): City? {
+            return FfiConverterOptionalTypeCity.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_transponder_core_fn_func_find_nearest_city(
+    
+        FfiConverterDouble.lower(`lat`),FfiConverterDouble.lower(`lng`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Find the nearest city to the given coordinates, filtered by region.
+         * First determines which region the coordinates are in, then only considers
+         * cities in that region. Falls back to unfiltered search if no region match.
+         */ fun `findNearestCityInRegion`(`lat`: kotlin.Double, `lng`: kotlin.Double): City? {
+            return FfiConverterOptionalTypeCity.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_transponder_core_fn_func_find_nearest_city_in_region(
+    
+        FfiConverterDouble.lower(`lat`),FfiConverterDouble.lower(`lng`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Find which region contains the given coordinates using point-in-polygon tests.
+         * Returns None if the point is not within any known region (e.g., ocean, coastal areas).
+         */ fun `findRegion`(`lat`: kotlin.Double, `lng`: kotlin.Double): Region? {
+            return FfiConverterOptionalTypeRegion.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_transponder_core_fn_func_find_region(
+    
+        FfiConverterDouble.lower(`lat`),FfiConverterDouble.lower(`lng`),_status)
 }
     )
     }

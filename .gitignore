@@ -34,3 +34,6 @@ serve.json
 # Xcode user data
 xcuserdata/
 result
+
+# Geoprocessing data
+core/geo/.cache
