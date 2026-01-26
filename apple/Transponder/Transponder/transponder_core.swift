@@ -565,6 +565,77 @@ fileprivate struct FfiConverterData: FfiConverterRustBuffer {
 
 
 /**
+ * City information for reverse geocoding
+ */
+public struct City: Equatable, Hashable {
+    public var name: String
+    public var lat: Double
+    public var lng: Double
+    public var region: String
+    public var country: String
+    public var population: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(name: String, lat: Double, lng: Double, region: String, country: String, population: UInt32) {
+        self.name = name
+        self.lat = lat
+        self.lng = lng
+        self.region = region
+        self.country = country
+        self.population = population
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension City: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeCity: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> City {
+        return
+            try City(
+                name: FfiConverterString.read(from: &buf), 
+                lat: FfiConverterDouble.read(from: &buf), 
+                lng: FfiConverterDouble.read(from: &buf), 
+                region: FfiConverterString.read(from: &buf), 
+                country: FfiConverterString.read(from: &buf), 
+                population: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: City, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterDouble.write(value.lat, into: &buf)
+        FfiConverterDouble.write(value.lng, into: &buf)
+        FfiConverterString.write(value.region, into: &buf)
+        FfiConverterString.write(value.country, into: &buf)
+        FfiConverterUInt32.write(value.population, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCity_lift(_ buf: RustBuffer) throws -> City {
+    return try FfiConverterTypeCity.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCity_lower(_ value: City) -> RustBuffer {
+    return FfiConverterTypeCity.lower(value)
+}
+
+
+/**
  * Result of fetching a friend's location
  */
 public struct FetchedLocation: Equatable, Hashable {
@@ -1016,6 +1087,61 @@ public func FfiConverterTypePreparedRequest_lower(_ value: PreparedRequest) -> R
 }
 
 
+/**
+ * Region lookup result
+ */
+public struct Region: Equatable, Hashable {
+    public var name: String
+    public var country: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(name: String, country: String) {
+        self.name = name
+        self.country = country
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension Region: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRegion: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Region {
+        return
+            try Region(
+                name: FfiConverterString.read(from: &buf), 
+                country: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: Region, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterString.write(value.country, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRegion_lift(_ buf: RustBuffer) throws -> Region {
+    return try FfiConverterTypeRegion.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRegion_lower(_ value: Region) -> RustBuffer {
+    return FfiConverterTypeRegion.lower(value)
+}
+
+
 public enum CoreError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError {
 
     
@@ -1210,6 +1336,30 @@ fileprivate struct FfiConverterOptionString: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeCity: FfiConverterRustBuffer {
+    typealias SwiftType = City?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeCity.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeCity.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeLocation: FfiConverterRustBuffer {
     typealias SwiftType = Location?
 
@@ -1226,6 +1376,30 @@ fileprivate struct FfiConverterOptionTypeLocation: FfiConverterRustBuffer {
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterTypeLocation.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeRegion: FfiConverterRustBuffer {
+    typealias SwiftType = Region?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeRegion.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeRegion.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -1449,6 +1623,43 @@ public func encryptLocation(location: Location, sharedSecret: Data)throws  -> Da
     uniffi_transponder_core_fn_func_encrypt_location(
         FfiConverterTypeLocation_lower(location),
         FfiConverterData.lower(sharedSecret),$0
+    )
+})
+}
+/**
+ * Find the nearest city to the given coordinates.
+ * Uses a weighted score that prefers larger cities when distances are similar.
+ */
+public func findNearestCity(lat: Double, lng: Double) -> City?  {
+    return try!  FfiConverterOptionTypeCity.lift(try! rustCall() {
+    uniffi_transponder_core_fn_func_find_nearest_city(
+        FfiConverterDouble.lower(lat),
+        FfiConverterDouble.lower(lng),$0
+    )
+})
+}
+/**
+ * Find the nearest city to the given coordinates, filtered by region.
+ * First determines which region the coordinates are in, then only considers
+ * cities in that region. Falls back to unfiltered search if no region match.
+ */
+public func findNearestCityInRegion(lat: Double, lng: Double) -> City?  {
+    return try!  FfiConverterOptionTypeCity.lift(try! rustCall() {
+    uniffi_transponder_core_fn_func_find_nearest_city_in_region(
+        FfiConverterDouble.lower(lat),
+        FfiConverterDouble.lower(lng),$0
+    )
+})
+}
+/**
+ * Find which region contains the given coordinates using point-in-polygon tests.
+ * Returns None if the point is not within any known region (e.g., ocean, coastal areas).
+ */
+public func findRegion(lat: Double, lng: Double) -> Region?  {
+    return try!  FfiConverterOptionTypeRegion.lift(try! rustCall() {
+    uniffi_transponder_core_fn_func_find_region(
+        FfiConverterDouble.lower(lat),
+        FfiConverterDouble.lower(lng),$0
     )
 })
 }
@@ -1696,6 +1907,15 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_transponder_core_checksum_func_encrypt_location() != 17870) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_transponder_core_checksum_func_find_nearest_city() != 51288) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_transponder_core_checksum_func_find_nearest_city_in_region() != 24478) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_transponder_core_checksum_func_find_region() != 46428) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_transponder_core_checksum_func_generate_friend_link() != 59198) {
