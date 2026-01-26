@@ -160,12 +160,16 @@ class LocationSyncService(
                     is TransponderHttp.Result.Success -> {
                         val locations = processFetchResponse(identity, result.body)
 
-                        // Update cached locations in storage
+                        // Update cached locations in storage (only if we got a valid location)
                         for (loc in locations) {
-                            try {
-                                updateFriendLocation(loc.pubkey, loc.location, now)
-                            } catch (e: Exception) {
-                                android.util.Log.e("LocationSync", "Failed to update location for ${loc.pubkey}: ${e.message}")
+                            // Only update if we successfully decrypted a location
+                            // If decryption fails (e.g., friend removed us), keep showing last known location
+                            if (loc.location != null) {
+                                try {
+                                    updateFriendLocation(loc.pubkey, loc.location, now)
+                                } catch (e: Exception) {
+                                    android.util.Log.e("LocationSync", "Failed to update location for ${loc.pubkey}: ${e.message}")
+                                }
                             }
                         }
 

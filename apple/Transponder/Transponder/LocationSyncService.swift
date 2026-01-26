@@ -231,13 +231,17 @@ class LocationSyncService {
                 if case .success(let data) = result {
                     let locations = try processFetchResponse(identity: identity, responseBody: data)
 
-                    // Update cached locations in storage
+                    // Update cached locations in storage (only if we got a valid location)
                     for loc in locations {
-                        try? updateFriendLocation(
-                            pubkey: loc.pubkey,
-                            location: loc.location,
-                            fetchedAt: now
-                        )
+                        // Only update if we successfully decrypted a location
+                        // If decryption fails (e.g., friend removed us), keep showing last known location
+                        if loc.location != nil {
+                            try? updateFriendLocation(
+                                pubkey: loc.pubkey,
+                                location: loc.location,
+                                fetchedAt: now
+                            )
+                        }
                     }
 
                     allLocations.append(contentsOf: locations)
