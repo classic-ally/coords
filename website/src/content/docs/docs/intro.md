@@ -34,6 +34,5 @@ The server never sees your actual location—only encrypted data that it cannot 
 
 ## Getting the app
 
-- [Android (Play Store)](#) - Coming soon
-- [iOS (App Store)](#) - Coming soon
-- [F-Droid](#) - Coming soon
+- [iOS (TestFlight)](https://testflight.apple.com/join/e2DQGWDB)
+- [Android (F-Droid)](/docs/android)

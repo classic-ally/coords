@@ -32,6 +32,7 @@ export default defineConfig({
           label: 'Docs',
           items: [
             { label: 'Introduction', slug: 'docs/intro' },
+            { label: 'Android', slug: 'docs/android' },
             { label: 'Self-Hosting', slug: 'docs/self-hosting' },
           ],
         },
