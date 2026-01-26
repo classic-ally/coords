@@ -1,5 +1,6 @@
 package sh.bentley.transponder
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -18,6 +19,8 @@ fun LocationSettingsScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+
+    BackHandler { onDismiss() }
 
     // Settings state
     var activeTimeoutSec by remember { mutableIntStateOf((identityStore.locationActiveTimeoutMs / 1000).toInt()) }

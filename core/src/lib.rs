@@ -1136,6 +1136,311 @@ pub fn parse_friend_link(url: String) -> Result<ParsedFriendLink, CoreError> {
     })
 }
 
+// =============================================================================
+// City Database - Privacy-preserving local reverse geocoding
+// =============================================================================
+
+/// City information for reverse geocoding
+#[derive(Debug, Clone, serde::Deserialize, uniffi::Record)]
+pub struct City {
+    #[serde(rename = "n")]
+    pub name: String,
+    #[serde(rename = "la")]
+    pub lat: f64,
+    #[serde(rename = "lo")]
+    pub lng: f64,
+    #[serde(rename = "r", default)]
+    pub region: String,
+    #[serde(rename = "c", default)]
+    pub country: String,
+    #[serde(rename = "p", default)]
+    pub population: u32,
+}
+
+impl City {
+    /// Returns a display string like "Toronto, ON" or "Paris, France"
+    pub fn display_name(&self) -> String {
+        if !self.region.is_empty() {
+            format!("{}, {}", self.name, self.region)
+        } else {
+            format!("{}, {}", self.name, self.country)
+        }
+    }
+}
+
+/// Lazily loaded city database
+static CITIES: OnceLock<Vec<City>> = OnceLock::new();
+
+/// Load cities from embedded JSON (called lazily on first access)
+fn get_cities() -> &'static Vec<City> {
+    CITIES.get_or_init(|| {
+        let json = include_str!("cities.json");
+        serde_json::from_str(json).expect("Failed to parse embedded cities.json")
+    })
+}
+
+/// Find the nearest city to the given coordinates.
+/// Uses a weighted score that prefers larger cities when distances are similar.
+#[uniffi::export]
+pub fn find_nearest_city(lat: f64, lng: f64) -> Option<City> {
+    let cities = get_cities();
+
+    cities
+        .iter()
+        .min_by(|a, b| {
+            let score_a = city_score(a, lat, lng);
+            let score_b = city_score(b, lat, lng);
+            score_a.partial_cmp(&score_b).unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .cloned()
+}
+
+/// Calculate score for a city (lower is better)
+/// Score = distance - population bonus
+fn city_score(city: &City, lat: f64, lng: f64) -> f64 {
+    let distance = haversine_distance(lat, lng, city.lat, city.lng);
+    let population_bonus = (city.population.max(1) as f64).ln() * 0.5;
+    distance - population_bonus
+}
+
+/// Haversine distance in kilometers between two points
+fn haversine_distance(lat1: f64, lng1: f64, lat2: f64, lng2: f64) -> f64 {
+    const R: f64 = 6371.0; // Earth radius in km
+    let d_lat = (lat2 - lat1).to_radians();
+    let d_lng = (lng2 - lng1).to_radians();
+    let a = (d_lat / 2.0).sin().powi(2)
+        + lat1.to_radians().cos() * lat2.to_radians().cos() * (d_lng / 2.0).sin().powi(2);
+    let c = 2.0 * a.sqrt().atan2((1.0 - a).sqrt());
+    R * c
+}
+
+// =============================================================================
+// Region Boundaries - Point-in-polygon lookup for accurate geocoding
+// =============================================================================
+
+/// A region boundary polygon with bounding box for fast rejection
+#[derive(Debug, Clone)]
+struct RegionBoundary {
+    name: String,
+    country: String,
+    /// Bounding box: (min_lng, min_lat, max_lng, max_lat)
+    bbox: (f64, f64, f64, f64),
+    /// Polygon rings: outer ring first, then holes. Each ring is vec of (lng, lat)
+    rings: Vec<Vec<(f64, f64)>>,
+}
+
+/// Lazily loaded region boundaries
+static BOUNDARIES: OnceLock<Vec<RegionBoundary>> = OnceLock::new();
+
+/// Load boundaries from embedded GeoJSON
+fn get_boundaries() -> &'static Vec<RegionBoundary> {
+    BOUNDARIES.get_or_init(|| {
+        let json = include_str!("boundaries.json");
+        parse_boundaries_geojson(json)
+    })
+}
+
+/// Parse GeoJSON FeatureCollection into RegionBoundary structs
+fn parse_boundaries_geojson(json: &str) -> Vec<RegionBoundary> {
+    let parsed: serde_json::Value = serde_json::from_str(json).unwrap_or_default();
+    let features = parsed["features"].as_array();
+
+    let Some(features) = features else {
+        return Vec::new();
+    };
+
+    let mut boundaries = Vec::with_capacity(features.len());
+
+    for feature in features {
+        let props = &feature["properties"];
+        let name = props["name"].as_str().unwrap_or("").to_string();
+        let country = props["admin"].as_str().unwrap_or("").to_string();
+
+        let geom = &feature["geometry"];
+        let geom_type = geom["type"].as_str().unwrap_or("");
+
+        let polygons: Vec<Vec<Vec<(f64, f64)>>> = match geom_type {
+            "Polygon" => {
+                if let Some(rings) = parse_polygon_coords(&geom["coordinates"]) {
+                    vec![rings]
+                } else {
+                    continue;
+                }
+            }
+            "MultiPolygon" => {
+                let Some(coords) = geom["coordinates"].as_array() else {
+                    continue;
+                };
+                coords.iter()
+                    .filter_map(|poly| parse_polygon_coords(poly))
+                    .collect()
+            }
+            _ => continue,
+        };
+
+        // Create a boundary for each polygon in a MultiPolygon
+        for rings in polygons {
+            if rings.is_empty() || rings[0].is_empty() {
+                continue;
+            }
+
+            // Calculate bounding box from outer ring
+            let outer = &rings[0];
+            let mut min_lng = f64::MAX;
+            let mut min_lat = f64::MAX;
+            let mut max_lng = f64::MIN;
+            let mut max_lat = f64::MIN;
+
+            for &(lng, lat) in outer {
+                min_lng = min_lng.min(lng);
+                min_lat = min_lat.min(lat);
+                max_lng = max_lng.max(lng);
+                max_lat = max_lat.max(lat);
+            }
+
+            boundaries.push(RegionBoundary {
+                name: name.clone(),
+                country: country.clone(),
+                bbox: (min_lng, min_lat, max_lng, max_lat),
+                rings,
+            });
+        }
+    }
+
+    boundaries
+}
+
+/// Parse polygon coordinates from GeoJSON
+fn parse_polygon_coords(coords: &serde_json::Value) -> Option<Vec<Vec<(f64, f64)>>> {
+    let rings = coords.as_array()?;
+    let mut result = Vec::with_capacity(rings.len());
+
+    for ring in rings {
+        let points = ring.as_array()?;
+        let mut ring_coords = Vec::with_capacity(points.len());
+
+        for point in points {
+            let arr = point.as_array()?;
+            let lng = arr.first()?.as_f64()?;
+            let lat = arr.get(1)?.as_f64()?;
+            ring_coords.push((lng, lat));
+        }
+
+        result.push(ring_coords);
+    }
+
+    Some(result)
+}
+
+/// Region lookup result
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct Region {
+    pub name: String,
+    pub country: String,
+}
+
+/// Find which region contains the given coordinates using point-in-polygon tests.
+/// Returns None if the point is not within any known region (e.g., ocean, coastal areas).
+#[uniffi::export]
+pub fn find_region(lat: f64, lng: f64) -> Option<Region> {
+    let boundaries = get_boundaries();
+
+    for boundary in boundaries {
+        // Fast bounding box rejection
+        let (min_lng, min_lat, max_lng, max_lat) = boundary.bbox;
+        if lng < min_lng || lng > max_lng || lat < min_lat || lat > max_lat {
+            continue;
+        }
+
+        // Point-in-polygon test
+        if point_in_polygon(lng, lat, &boundary.rings) {
+            return Some(Region {
+                name: boundary.name.clone(),
+                country: boundary.country.clone(),
+            });
+        }
+    }
+
+    None
+}
+
+/// Ray casting algorithm for point-in-polygon test.
+/// Handles polygons with holes (first ring is outer, rest are holes).
+fn point_in_polygon(x: f64, y: f64, rings: &[Vec<(f64, f64)>]) -> bool {
+    if rings.is_empty() {
+        return false;
+    }
+
+    // Must be inside outer ring
+    if !point_in_ring(x, y, &rings[0]) {
+        return false;
+    }
+
+    // Must not be inside any holes
+    for hole in rings.iter().skip(1) {
+        if point_in_ring(x, y, hole) {
+            return false;
+        }
+    }
+
+    true
+}
+
+/// Ray casting for a single ring
+fn point_in_ring(x: f64, y: f64, ring: &[(f64, f64)]) -> bool {
+    let n = ring.len();
+    if n < 3 {
+        return false;
+    }
+
+    let mut inside = false;
+    let mut j = n - 1;
+
+    for i in 0..n {
+        let (xi, yi) = ring[i];
+        let (xj, yj) = ring[j];
+
+        if ((yi > y) != (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi) {
+            inside = !inside;
+        }
+
+        j = i;
+    }
+
+    inside
+}
+
+/// Find the nearest city to the given coordinates, filtered by region.
+/// First determines which region the coordinates are in, then only considers
+/// cities in that region. Falls back to unfiltered search if no region match.
+#[uniffi::export]
+pub fn find_nearest_city_in_region(lat: f64, lng: f64) -> Option<City> {
+    let cities = get_cities();
+
+    // Try to find which region the point is in
+    if let Some(region) = find_region(lat, lng) {
+        // Filter cities to this region
+        let regional_cities: Vec<&City> = cities
+            .iter()
+            .filter(|c| c.region == region.name && c.country == region.country)
+            .collect();
+
+        if !regional_cities.is_empty() {
+            return regional_cities
+                .into_iter()
+                .min_by(|a, b| {
+                    let score_a = city_score(a, lat, lng);
+                    let score_b = city_score(b, lat, lng);
+                    score_a.partial_cmp(&score_b).unwrap_or(std::cmp::Ordering::Equal)
+                })
+                .cloned();
+        }
+    }
+
+    // Fallback: no region match or no cities in region, use global search
+    find_nearest_city(lat, lng)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

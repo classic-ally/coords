@@ -172,7 +172,6 @@
           config.allowUnfree = true;
           config.android_sdk.accept_license = true;
         };
-        inherit (self.packages.${system}) android-toolchain;
         androidSdk = (pkgs.androidenv.composeAndroidPackages {
           platformVersions = [ "36" ];
           buildToolsVersions = [ "35.0.0" "36.0.0" ];  # AGP 8.x needs 35
@@ -182,11 +181,28 @@
       in {
         default = pkgs.mkShell {
           buildInputs = [
-            android-toolchain
+            androidSdk
+            pkgs.cargo-ndk
+            pkgs.jdk17
+            pkgs.gradle
+            (fenix.packages.${system}.combine [
+              fenix.packages.${system}.stable.cargo
+              fenix.packages.${system}.stable.rustc
+              fenix.packages.${system}.stable.rust-src
+              fenix.packages.${system}.targets.aarch64-linux-android.stable.rust-std
+              fenix.packages.${system}.targets.armv7-linux-androideabi.stable.rust-std
+              fenix.packages.${system}.targets.x86_64-linux-android.stable.rust-std
+              fenix.packages.${system}.targets.i686-linux-android.stable.rust-std
+            ])
+            pkgs.android-studio
             pkgs.rust-analyzer
             pkgs.nodejs_24
             pkgs.git
             pkgs.jq
+            # For core/geo/update_cities.sh preprocessing
+            pkgs.unzip
+            pkgs.gdal
+            (pkgs.python3.withPackages (ps: [ ps.shapely ]))
           ];
 
           shellHook = ''

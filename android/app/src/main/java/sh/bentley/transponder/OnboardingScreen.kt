@@ -3,6 +3,7 @@ package sh.bentley.transponder
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
@@ -67,6 +68,14 @@ fun OnboardingScreen(
     var currentPage by remember { mutableStateOf(OnboardingPage.Welcome) }
     var hasLocationPermission by remember { mutableStateOf(false) }
     var hasBackgroundPermission by remember { mutableStateOf(false) }
+
+    BackHandler(enabled = currentPage != OnboardingPage.Welcome) {
+        currentPage = when (currentPage) {
+            OnboardingPage.Identity -> OnboardingPage.Location
+            OnboardingPage.Location -> OnboardingPage.Welcome
+            OnboardingPage.Welcome -> OnboardingPage.Welcome
+        }
+    }
 
     Scaffold { innerPadding ->
         AnimatedContent(
