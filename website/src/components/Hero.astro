@@ -29,7 +29,9 @@ const isHomepage = Astro.url.pathname === '/' || Astro.url.pathname === '';
         </li>
         <li>
           <span class="platform-name">Android</span>
-          <span class="coming-soon">Coming soon</span>
+          <a href="/docs/android">
+            <img src="/fdroid-badge.png" alt="Get it on F-Droid" />
+          </a>
         </li>
       </ul>
     </div>
@@ -172,8 +174,8 @@ const isHomepage = Astro.url.pathname === '/' || Astro.url.pathname === '';
   }
 
   .download-list img {
-    height: 40px;
-    width: auto;
+    width: 135px;
+    height: auto;
   }
 
   .coming-soon {
