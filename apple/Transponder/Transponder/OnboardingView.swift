@@ -55,14 +55,12 @@ private struct WelcomePage: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header area
-            VStack(spacing: 8) {
-                Spacer()
-                    .frame(height: 60)
+            Spacer()
 
-                Image(systemName: "location.circle.fill")
-                    .font(.system(size: 64))
-                    .foregroundStyle(.blue)
+            // Header area
+            VStack(spacing: 12) {
+                AppIconView()
+                    .frame(width: 80, height: 80)
 
                 Text("Coords")
                     .font(.largeTitle)
@@ -79,7 +77,7 @@ private struct WelcomePage: View {
                 .frame(height: 48)
 
             // Feature highlights - Apple style
-            VStack(spacing: 28) {
+            VStack(spacing: 24) {
                 FeatureItem(
                     icon: "lock.fill",
                     iconColor: .blue,
@@ -127,14 +125,14 @@ private struct FeatureItem: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 16) {
-            // Apple-style icon with colored background
+            // Liquid Glass style - colored icon on tinted background
             Image(systemName: icon)
                 .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(iconColor)
                 .frame(width: 44, height: 44)
-                .background(iconColor, in: RoundedRectangle(cornerRadius: 10))
+                .background(iconColor.opacity(0.15), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(.body)
                     .fontWeight(.semibold)
@@ -584,6 +582,38 @@ private struct ServerConfigSheet: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - App Icon View
+
+/// Loads the app icon from the bundle - automatically uses the correct icon
+private struct AppIconView: View {
+    var body: some View {
+        #if os(iOS)
+        if let iconName = Bundle.main.object(forInfoDictionaryKey: "CFBundleIcons") as? [String: Any],
+           let primaryIcon = iconName["CFBundlePrimaryIcon"] as? [String: Any],
+           let iconFiles = primaryIcon["CFBundleIconFiles"] as? [String],
+           let lastIcon = iconFiles.last,
+           let uiImage = UIImage(named: lastIcon) {
+            Image(uiImage: uiImage)
+                .resizable()
+                .scaledToFit()
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        } else {
+            // Fallback to asset catalog
+            Image("CoordsLogo")
+                .resizable()
+                .scaledToFit()
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+        #else
+        // macOS fallback
+        Image("CoordsLogo")
+            .resizable()
+            .scaledToFit()
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        #endif
     }
 }
 

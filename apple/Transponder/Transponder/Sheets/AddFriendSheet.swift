@@ -214,15 +214,13 @@ struct AddFriendContent: View {
                 if isProcessing {
                     ProgressView("Checking...")
                         .padding()
-                        .background(.regularMaterial)
-                        .cornerRadius(8)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 } else if isFirstStep {
                     Text("Point camera at your friend's QR code")
                         .font(.subheadline)
                         .padding(.vertical, 8)
                         .padding(.horizontal, 16)
-                        .background(.regularMaterial)
-                        .cornerRadius(8)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
 
                 Button {
@@ -231,8 +229,7 @@ struct AddFriendContent: View {
                     Label("Add with Link", systemImage: "link")
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .background(.regularMaterial)
-                        .cornerRadius(10)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 }
                 .padding(.horizontal)
                 .padding(.bottom, 8)
@@ -368,4 +365,59 @@ struct AddFriendContent: View {
         }
         .padding()
     }
+}
+
+#Preview("Show QR - Step 1") {
+    AddFriendContent(
+        identityStore: IdentityStore(),
+        step: .showQR(role: .showFirst, isSecondStep: false, addedName: nil),
+        onNavigate: { _ in },
+        onAddFriend: { _, _ in },
+        onComplete: { _ in },
+        onCancel: {}
+    )
+}
+
+#Preview("Show QR - Step 2 (Friend Added)") {
+    AddFriendContent(
+        identityStore: IdentityStore(),
+        step: .showQR(role: .showFirst, isSecondStep: true, addedName: "Alice"),
+        onNavigate: { _ in },
+        onAddFriend: { _, _ in },
+        onComplete: { _ in },
+        onCancel: {}
+    )
+}
+
+#Preview("Scan QR - First Step") {
+    AddFriendContent(
+        identityStore: IdentityStore(),
+        step: .scanQR(role: .scanFirst, isFirstStep: true),
+        onNavigate: { _ in },
+        onAddFriend: { _, _ in },
+        onComplete: { _ in },
+        onCancel: {}
+    )
+}
+
+#Preview("Scan QR - Second Step") {
+    AddFriendContent(
+        identityStore: IdentityStore(),
+        step: .scanQR(role: .showFirst, isFirstStep: false),
+        onNavigate: { _ in },
+        onAddFriend: { _, _ in },
+        onComplete: { _ in },
+        onCancel: {}
+    )
+}
+
+#Preview("Link Entry") {
+    AddFriendContent(
+        identityStore: IdentityStore(),
+        step: .linkEntry(role: .showFirst),
+        onNavigate: { _ in },
+        onAddFriend: { _, _ in },
+        onComplete: { _ in },
+        onCancel: {}
+    )
 }

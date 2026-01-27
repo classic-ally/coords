@@ -21,7 +21,6 @@ struct FriendsSheetContent: View {
             SheetHeader {
                 Text("Friends")
                     .font(.title2.bold())
-                    .frame(height: 32)
             } trailing: {
                 if isEditMode {
                     // Refresh button in edit mode
@@ -33,44 +32,41 @@ struct FriendsSheetContent: View {
                                 Image(systemName: "arrow.clockwise")
                             }
                         }
-                        .font(.system(size: 16, weight: .semibold))
-                        .frame(width: 32, height: 32)
-                        .background(Color(.systemGray5))
-                        .clipShape(Circle())
+                        .font(.system(size: 18, weight: .semibold))
+                        .frame(width: 40, height: 40)
+                        .background(.ultraThinMaterial, in: Circle())
                     }
                     .disabled(isFetchingFriends)
 
                     // Done editing
                     Button(action: { isEditMode = false }) {
                         Image(systemName: "checkmark")
-                            .font(.system(size: 16, weight: .semibold))
-                            .frame(width: 32, height: 32)
-                            .background(Color(.systemGray5))
-                            .clipShape(Circle())
+                            .font(.system(size: 18, weight: .semibold))
+                            .frame(width: 40, height: 40)
+                            .background(.ultraThinMaterial, in: Circle())
                     }
                 } else {
                     // Add friend
                     Button(action: onStartAddFriend) {
                         Image(systemName: "plus")
-                            .font(.system(size: 16, weight: .semibold))
-                            .frame(width: 32, height: 32)
-                            .background(Color(.systemGray5))
-                            .clipShape(Circle())
+                            .font(.system(size: 18, weight: .semibold))
+                            .frame(width: 40, height: 40)
+                            .background(.ultraThinMaterial, in: Circle())
                     }
 
                     // Edit mode toggle
                     Button(action: { isEditMode = true }) {
                         Image(systemName: "pencil")
-                            .font(.system(size: 16, weight: .semibold))
-                            .frame(width: 32, height: 32)
-                            .background(Color(.systemGray5))
-                            .clipShape(Circle())
+                            .font(.system(size: 18, weight: .semibold))
+                            .frame(width: 40, height: 40)
+                            .background(.ultraThinMaterial, in: Circle())
                     }
 
                     // Profile
                     Button(action: onShowProfile) {
                         Image(systemName: "person.circle.fill")
-                            .font(.system(size: 32))
+                            .font(.system(size: 40))
+                            .frame(width: 40, height: 40)
                     }
                 }
             }
@@ -119,4 +115,63 @@ struct FriendsSheetContent: View {
             }
         }
     }
+}
+
+#Preview("Friends Sheet - Empty") {
+    FriendsSheetContent(
+        identityStore: IdentityStore(),
+        friends: [],
+        currentLocation: nil,
+        isFetchingFriends: false,
+        onRefresh: {},
+        onStartAddFriend: {},
+        onShowProfile: {},
+        onSelectFriend: { _ in },
+        onToggleShare: { _ in },
+        onToggleFetch: { _ in },
+        onDeleteFriend: { _ in }
+    )
+}
+
+#Preview("Friends Sheet - With Friends") {
+    FriendsSheetContent(
+        identityStore: IdentityStore(),
+        friends: [
+            Friend(
+                pubkey: "abc123",
+                server: "https://coord.is",
+                name: "Alice",
+                shareWith: true,
+                fetchFrom: true,
+                location: Location(
+                    latitude: 37.7749,
+                    longitude: -122.4194,
+                    altitude: 0,
+                    accuracy: 10,
+                    timestamp: UInt64(Date().timeIntervalSince1970 * 1000)
+                ),
+                fetchedAt: nil,
+                color: "#4A90D9"
+            ),
+            Friend(
+                pubkey: "def456",
+                server: "https://coord.is",
+                name: "Bob",
+                shareWith: true,
+                fetchFrom: false,
+                location: nil,
+                fetchedAt: nil,
+                color: "#50C878"
+            )
+        ],
+        currentLocation: nil,
+        isFetchingFriends: false,
+        onRefresh: {},
+        onStartAddFriend: {},
+        onShowProfile: {},
+        onSelectFriend: { _ in },
+        onToggleShare: { _ in },
+        onToggleFetch: { _ in },
+        onDeleteFriend: { _ in }
+    )
 }

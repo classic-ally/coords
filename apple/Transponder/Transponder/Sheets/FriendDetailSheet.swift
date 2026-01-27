@@ -3,6 +3,15 @@ import SwiftUI
 import UIKit
 #endif
 
+/// Button style for settings rows with press highlight
+private struct SettingsRowButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(configuration.isPressed ? Color.primary.opacity(0.1) : Color.clear)
+            .contentShape(Rectangle())
+    }
+}
+
 struct FriendDetailSheetContent: View {
     let friend: Friend
     let onBack: () -> Void
@@ -59,15 +68,15 @@ struct FriendDetailSheetContent: View {
             } trailing: {
                 Button(action: onEditName) {
                     Image(systemName: "pencil")
-                        .font(.system(size: 16, weight: .semibold))
-                        .frame(width: 32, height: 32)
-                        .background(Color(.systemGray5))
-                        .clipShape(Circle())
+                        .font(.system(size: 18, weight: .semibold))
+                        .frame(width: 40, height: 40)
+                        .background(.ultraThinMaterial, in: Circle())
                 }
 
                 Button(action: onBack) {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 32))
+                        .font(.system(size: 40))
+                        .frame(width: 40, height: 40)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -89,50 +98,64 @@ struct FriendDetailSheetContent: View {
                             }
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 12)
-                            .background(Color.secondary.opacity(0.1))
-                            .cornerRadius(10)
+                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .shadow(color: .black.opacity(0.08), radius: 4, y: 2)
                         }
                     }
                     #endif
 
-                    Divider()
-
-                    // Share toggle
-                    Toggle(isOn: Binding(
-                        get: { friend.shareWith },
-                        set: { _ in onToggleShare() }
-                    )) {
-                        HStack {
-                            Image(systemName: "arrow.up")
-                                .foregroundStyle(.blue)
-                            Text("Share with \(friend.name)")
+                    // Sharing settings group
+                    VStack(spacing: 0) {
+                        Toggle(isOn: Binding(
+                            get: { friend.shareWith },
+                            set: { _ in onToggleShare() }
+                        )) {
+                            HStack {
+                                Image(systemName: "arrow.up")
+                                    .foregroundStyle(.blue)
+                                Text("Share with \(friend.name)")
+                            }
                         }
-                    }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
 
-                    // Fetch toggle
-                    Toggle(isOn: Binding(
-                        get: { friend.fetchFrom },
-                        set: { _ in onToggleFetch() }
-                    )) {
-                        HStack {
-                            Image(systemName: "arrow.down")
-                                .foregroundStyle(.green)
-                            Text("See \(friend.name)")
+                        Divider()
+                            .padding(.leading, 48)
+
+                        Toggle(isOn: Binding(
+                            get: { friend.fetchFrom },
+                            set: { _ in onToggleFetch() }
+                        )) {
+                            HStack {
+                                Image(systemName: "arrow.down")
+                                    .foregroundStyle(.green)
+                                Text("See \(friend.name)")
+                            }
                         }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
                     }
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .shadow(color: .black.opacity(0.08), radius: 4, y: 2)
 
                     // Remove button - only when both toggles are off
                     if !friend.shareWith && !friend.fetchFrom {
-                        Divider()
-
                         Button(role: .destructive) {
                             showRemoveConfirmation = true
                         } label: {
                             HStack {
                                 Image(systemName: "person.badge.minus")
+                                    .foregroundStyle(.red)
                                 Text("Remove Friend")
+                                    .foregroundStyle(.red)
+                                Spacer()
                             }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
                         }
+                        .buttonStyle(SettingsRowButtonStyle())
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .shadow(color: .black.opacity(0.08), radius: 4, y: 2)
                     }
                 }
                 .padding()
@@ -143,4 +166,50 @@ struct FriendDetailSheetContent: View {
             Button("Cancel", role: .cancel) {}
         }
     }
+}
+
+#Preview("Friend Detail") {
+    FriendDetailSheetContent(
+        friend: Friend(
+            pubkey: "abc123",
+            server: "https://coord.is",
+            name: "Alice",
+            shareWith: true,
+            fetchFrom: true,
+            location: Location(
+                latitude: 37.7749,
+                longitude: -122.4194,
+                altitude: 0,
+                accuracy: 10,
+                timestamp: UInt64(Date().timeIntervalSince1970 * 1000)
+            ),
+            fetchedAt: nil,
+            color: "#4A90D9"
+        ),
+        onBack: {},
+        onToggleShare: {},
+        onToggleFetch: {},
+        onRemove: {},
+        onEditName: {}
+    )
+}
+
+#Preview("Friend Detail - No Location") {
+    FriendDetailSheetContent(
+        friend: Friend(
+            pubkey: "def456",
+            server: "https://coord.is",
+            name: "Bob",
+            shareWith: false,
+            fetchFrom: false,
+            location: nil,
+            fetchedAt: nil,
+            color: "#50C878"
+        ),
+        onBack: {},
+        onToggleShare: {},
+        onToggleFetch: {},
+        onRemove: {},
+        onEditName: {}
+    )
 }

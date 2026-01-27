@@ -1,6 +1,15 @@
 import SwiftUI
 import CoreLocation
 
+/// Button style for settings rows with press highlight
+private struct SettingsRowButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(configuration.isPressed ? Color.primary.opacity(0.1) : Color.clear)
+            .contentShape(Rectangle())
+    }
+}
+
 struct ProfileSheetContent: View {
     @ObservedObject var identityStore: IdentityStore
     @ObservedObject var locationManager: LocationManager
@@ -85,83 +94,29 @@ struct ProfileSheetContent: View {
                             Image(systemName: "icloud.and.arrow.up")
                         }
                     }
-                    .font(.system(size: 16, weight: .semibold))
-                    .frame(width: 32, height: 32)
-                    .background(Color(.systemGray5))
-                    .clipShape(Circle())
+                    .font(.system(size: 18, weight: .semibold))
+                    .frame(width: 40, height: 40)
+                    .background(.ultraThinMaterial, in: Circle())
                 }
                 .disabled(isUploading)
 
                 Button(action: { showingEditName = true }) {
                     Image(systemName: "pencil")
-                        .font(.system(size: 16, weight: .semibold))
-                        .frame(width: 32, height: 32)
-                        .background(Color(.systemGray5))
-                        .clipShape(Circle())
+                        .font(.system(size: 18, weight: .semibold))
+                        .frame(width: 40, height: 40)
+                        .background(.ultraThinMaterial, in: Circle())
                 }
 
                 Button(action: onBack) {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 32))
+                        .font(.system(size: 40))
+                        .frame(width: 40, height: 40)
                         .foregroundStyle(.secondary)
                 }
             }
 
             ScrollView {
-                VStack(spacing: 20) {
-
-                    if let message = uploadMessage {
-                        Text(message)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    // Server location toggle
-                    Toggle(isOn: $showServerLocation) {
-                        HStack {
-                            Image(systemName: "cloud.fill")
-                                .foregroundStyle(.orange)
-                            Text("Show server location")
-                        }
-                    }
-                    .padding(.horizontal)
-                    .onChange(of: showServerLocation) { _, newValue in
-                        if newValue { fetchServerLocation() }
-                    }
-
-                    // Auto-share toggle
-                    Toggle(isOn: Binding(
-                        get: { identityStore.autoShareEnabled },
-                        set: { newValue in
-                            if newValue {
-                                // Check if we have Always permission
-                                if BackgroundSyncManager.shared.hasAlwaysAuthorization {
-                                    identityStore.setAutoShareEnabled(true)
-                                    BackgroundSyncManager.shared.startMonitoringSignificantLocationChanges()
-                                    BackgroundSyncManager.shared.scheduleBackgroundRefresh()
-                                } else {
-                                    // Request permission
-                                    BackgroundSyncManager.shared.requestAlwaysAuthorization()
-                                }
-                            } else {
-                                identityStore.setAutoShareEnabled(false)
-                                BackgroundSyncManager.shared.stopMonitoringSignificantLocationChanges()
-                            }
-                        }
-                    )) {
-                        HStack {
-                            Image(systemName: "location.fill")
-                                .foregroundStyle(.blue)
-                            VStack(alignment: .leading) {
-                                Text("Share automatically")
-                                Text(identityStore.autoShareEnabled ? "Sharing in background" : "Manual sharing only")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                    .padding(.horizontal)
-
+                VStack(spacing: 16) {
                     // Share my link button
                     Button { showingMyLink = true } label: {
                         HStack {
@@ -170,45 +125,121 @@ struct ProfileSheetContent: View {
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .background(Color.secondary.opacity(0.1))
-                        .cornerRadius(10)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .shadow(color: .black.opacity(0.08), radius: 4, y: 2)
                     }
-                    .padding(.horizontal)
 
-                    Divider()
-                        .padding(.vertical, 8)
-
-                    // Server URL
-                    Button { showingEditServer = true } label: {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(serverVersion != nil ? "Server v\(serverVersion!)" : "Server")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.primary)
-                                Text(identityStore.serverUrl)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
+                    // Location settings group
+                    VStack(spacing: 0) {
+                        Toggle(isOn: $showServerLocation) {
+                            HStack {
+                                Image(systemName: "cloud.fill")
+                                    .foregroundStyle(.orange)
+                                Text("Show server location")
                             }
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.caption)
-                                .foregroundStyle(.tertiary)
                         }
-                        .padding(.horizontal)
-                    }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .onChange(of: showServerLocation) { _, newValue in
+                            if newValue { fetchServerLocation() }
+                        }
 
-                    // App and core version
-                    Button { showingLicenses = true } label: {
-                        let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
-                        Text("Coords iOS v\(appVersion) · Core \(getVersion())")
+                        Divider()
+                            .padding(.leading, 48)
+
+                        Toggle(isOn: Binding(
+                            get: { identityStore.autoShareEnabled },
+                            set: { newValue in
+                                if newValue {
+                                    if BackgroundSyncManager.shared.hasAlwaysAuthorization {
+                                        identityStore.setAutoShareEnabled(true)
+                                        BackgroundSyncManager.shared.startMonitoringSignificantLocationChanges()
+                                        BackgroundSyncManager.shared.scheduleBackgroundRefresh()
+                                    } else {
+                                        BackgroundSyncManager.shared.requestAlwaysAuthorization()
+                                    }
+                                } else {
+                                    identityStore.setAutoShareEnabled(false)
+                                    BackgroundSyncManager.shared.stopMonitoringSignificantLocationChanges()
+                                }
+                            }
+                        )) {
+                            HStack {
+                                Image(systemName: "location.fill")
+                                    .foregroundStyle(.blue)
+                                VStack(alignment: .leading) {
+                                    Text("Share automatically")
+                                    Text(identityStore.autoShareEnabled ? "Sharing in background" : "Manual sharing only")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                    }
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .shadow(color: .black.opacity(0.08), radius: 4, y: 2)
+
+                    if let message = uploadMessage {
+                        Text(message)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
-                    .padding(.horizontal)
-                    .padding(.top, 8)
+
+                    // App info group
+                    VStack(spacing: 0) {
+                        Button { showingEditServer = true } label: {
+                            HStack {
+                                Image(systemName: "server.rack")
+                                    .foregroundStyle(.purple)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(serverVersion != nil ? "Server v\(serverVersion!)" : "Server")
+                                        .foregroundStyle(.primary)
+                                    Text(identityStore.serverUrl)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundStyle(.tertiary)
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                        }
+                        .buttonStyle(SettingsRowButtonStyle())
+
+                        Divider()
+                            .padding(.leading, 48)
+
+                        Button { showingLicenses = true } label: {
+                            HStack {
+                                Image(systemName: "info.circle")
+                                    .foregroundStyle(.gray)
+                                let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("About")
+                                        .foregroundStyle(.primary)
+                                    Text("v\(appVersion) · Core \(getVersion())")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundStyle(.tertiary)
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                        }
+                        .buttonStyle(SettingsRowButtonStyle())
+                    }
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .shadow(color: .black.opacity(0.08), radius: 4, y: 2)
                 }
-                .padding(.bottom, 20)
+                .padding()
             }
         }
         .sheet(isPresented: $showingLicenses) {
@@ -265,9 +296,8 @@ struct ProfileSheetContent: View {
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
-                    .background(.blue)
+                    .background(.blue, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                     .foregroundStyle(.white)
-                    .cornerRadius(10)
                 }
                 .disabled(isValidatingServer || editedServerUrl.isEmpty)
 
@@ -370,4 +400,18 @@ struct ProfileSheetContent: View {
             }
         }
     }
+}
+
+#Preview("Profile Sheet") {
+    ProfileSheetContent(
+        identityStore: IdentityStore(),
+        locationManager: LocationManager(),
+        syncService: LocationSyncService(),
+        isUploading: .constant(false),
+        uploadMessage: .constant(nil),
+        showServerLocation: .constant(false),
+        serverLocation: .constant(nil),
+        serverVersion: "1.0.0",
+        onBack: {}
+    )
 }

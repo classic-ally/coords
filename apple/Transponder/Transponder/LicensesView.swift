@@ -35,6 +35,18 @@ struct LicensesSheet: View {
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
+
+                        HStack(spacing: 12) {
+                            Link(destination: URL(string: "https://coord.is")!) {
+                                Label("Website", systemImage: "globe")
+                            }
+                            .buttonStyle(.glass)
+
+                            Link(destination: URL(string: "https://tangled.org/bentley.sh/coords")!) {
+                                Label("Source", systemImage: "chevron.left.forwardslash.chevron.right")
+                            }
+                            .buttonStyle(.glass)
+                        }
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
@@ -110,4 +122,8 @@ struct DependenciesListView: View {
         .navigationTitle("Dependencies")
         .navigationBarTitleDisplayMode(.inline)
     }
+}
+
+#Preview {
+    LicensesSheet()
 }

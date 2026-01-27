@@ -47,6 +47,18 @@ struct MainView: View {
     private let profileDetents: Set<PresentationDetent> = [.height(60), .fraction(0.4), .large]
     private let detailDetents: Set<PresentationDetent> = [.height(60), .fraction(0.4)]
 
+    /// Animated binding for detent changes
+    private var animatedDetentBinding: Binding<PresentationDetent> {
+        Binding(
+            get: { selectedDetent },
+            set: { newValue in
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    selectedDetent = newValue
+                }
+            }
+        )
+    }
+
     /// Computed location for "my location" display - either server or GPS based on toggle
     private var myDisplayLocation: (coordinate: CLLocationCoordinate2D, accuracy: Double)? {
         if showServerLocation, let serverLoc = serverLocation {
@@ -159,7 +171,7 @@ struct MainView: View {
         }
         .sheet(isPresented: $showSheet) {
             sheetContentView
-                .presentationDetents(currentDetents, selection: $selectedDetent)
+                .presentationDetents(currentDetents, selection: animatedDetentBinding)
                 .presentationDragIndicator(.visible)
                 .presentationBackgroundInteraction(.enabled(upThrough: .fraction(0.4)))
                 .interactiveDismissDisabled()
@@ -269,8 +281,10 @@ struct MainView: View {
         .onChange(of: pendingFriendLink) { _, newLink in
             if let link = newLink {
                 if let parsed = try? parseFriendLink(url: link) {
-                    sheetContent = .confirmAddFriend(parsed)
-                    selectedDetent = .medium
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        sheetContent = .confirmAddFriend(parsed)
+                        selectedDetent = .medium
+                    }
                 }
                 pendingFriendLink = nil
             }
@@ -303,18 +317,22 @@ struct MainView: View {
                 isFetchingFriends: isFetchingFriends,
                 onRefresh: { fetchFriendsIfNeeded(force: true) },
                 onStartAddFriend: {
-                    sheetContent = .addFriend(.showQR(role: .showFirst, isSecondStep: false, addedName: nil))
-                    selectedDetent = .large
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        sheetContent = .addFriend(.showQR(role: .showFirst, isSecondStep: false, addedName: nil))
+                        selectedDetent = .large
+                    }
                 },
                 onShowProfile: {
-                    sheetContent = .profile
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        sheetContent = .profile
+                        // Only expand if fully collapsed
+                        if selectedDetent == .height(60) {
+                            selectedDetent = .fraction(0.4)
+                        }
+                    }
                     // Center on my location
                     if let loc = locationManager.currentLocation {
                         pendingCameraAction = .centerOn(latitude: loc.coordinate.latitude, longitude: loc.coordinate.longitude)
-                    }
-                    // Only expand if fully collapsed
-                    if selectedDetent == .height(60) {
-                        selectedDetent = .fraction(0.4)
                     }
                 },
                 onSelectFriend: { friend in
@@ -336,7 +354,9 @@ struct MainView: View {
                 serverLocation: $serverLocation,
                 serverVersion: serverVersion,
                 onBack: {
-                    sheetContent = .friends
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        sheetContent = .friends
+                    }
                     pendingCameraAction = .fitAllFriends
                 }
             )
@@ -346,7 +366,9 @@ struct MainView: View {
                 FriendDetailSheetContent(
                     friend: friend,
                     onBack: {
-                        sheetContent = .friends
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            sheetContent = .friends
+                        }
                         pendingCameraAction = .fitAllFriends
                     },
                     onToggleShare: {
@@ -360,7 +382,9 @@ struct MainView: View {
                     onRemove: {
                         try? removeFriend(pubkey: friend.pubkey)
                         refreshFriends()
-                        sheetContent = .friends
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            sheetContent = .friends
+                        }
                         pendingCameraAction = .fitAllFriends
                     },
                     onEditName: {
@@ -377,11 +401,15 @@ struct MainView: View {
             ConfirmAddFriendContent(
                 friend: friend,
                 onConfirm: {
-                    sheetContent = .friends
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        sheetContent = .friends
+                    }
                     handleDeepLink(friend)
                 },
                 onCancel: {
-                    sheetContent = .friends
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        sheetContent = .friends
+                    }
                 }
             )
 
@@ -390,7 +418,9 @@ struct MainView: View {
                 identityStore: identityStore,
                 step: step,
                 onNavigate: { newStep in
-                    sheetContent = .addFriend(newStep)
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        sheetContent = .addFriend(newStep)
+                    }
                 },
                 onAddFriend: { link, completion in
                     addFriendFromLink(link) { result in
@@ -404,13 +434,17 @@ struct MainView: View {
                        let friend = friends.first(where: { $0.pubkey == pubkey }) {
                         selectAndCenterOnFriend(friend)
                     } else {
-                        sheetContent = .friends
-                        selectedDetent = .fraction(0.4)
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            sheetContent = .friends
+                            selectedDetent = .fraction(0.4)
+                        }
                     }
                 },
                 onCancel: {
-                    sheetContent = .friends
-                    selectedDetent = .fraction(0.4)
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        sheetContent = .friends
+                        selectedDetent = .fraction(0.4)
+                    }
                 }
             )
         }
@@ -419,8 +453,10 @@ struct MainView: View {
     private func selectAndCenterOnFriend(_ friend: Friend) {
         guard let loc = friend.location else { return }
         pendingCameraAction = .centerOn(latitude: loc.latitude, longitude: loc.longitude)
-        sheetContent = .friendDetail(friend.pubkey)
-        selectedDetent = .fraction(0.4)
+        withAnimation(.easeInOut(duration: 0.2)) {
+            sheetContent = .friendDetail(friend.pubkey)
+            selectedDetent = .fraction(0.4)
+        }
     }
 
     private func executeCameraAction(_ action: CameraAction) {
@@ -608,8 +644,10 @@ struct MainView: View {
                 case .alreadyFriends(let friend):
                     selectAndCenterOnFriend(friend)
                 case .needsReciprocal(let name):
-                    sheetContent = .addFriend(.showQR(role: .scanFirst, isSecondStep: true, addedName: name))
-                    selectedDetent = .large
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        sheetContent = .addFriend(.showQR(role: .scanFirst, isSecondStep: true, addedName: name))
+                        selectedDetent = .large
+                    }
                 case .failed(let message):
                     uploadMessage = message
                 }
