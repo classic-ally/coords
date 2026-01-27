@@ -58,6 +58,9 @@
     dates = "03:00";
   };
 
+  # Timeout upgrade by 04:00 so it doesn't block fdroid-update (04:30)
+  systemd.services.nixos-upgrade.serviceConfig.TimeoutStartSec = "60m";
+
   # Tailscale (connects to headscale)
   services.tailscale = {
     useRoutingFeatures = "server";
