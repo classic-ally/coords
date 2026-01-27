@@ -5,7 +5,7 @@ import Combine
 // MARK: - Location Freshness
 
 enum LocationFreshness {
-    case cachedOkay   // Use cached if <5min old
+    case cachedOkay   // Use cached if <3min old
     case alwaysFresh  // Always request new GPS fix
 }
 
@@ -20,8 +20,11 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     @Published var currentLocation: CLLocation?
     @Published var authorizationStatus: CLAuthorizationStatus = .notDetermined
 
-    /// Maximum age for cached location to be considered fresh (5 minutes)
-    private let maxLocationAge: TimeInterval = 5 * 60
+    /// Called when location updates (including background). Set by MainView for uploads.
+    var onBackgroundLocationUpdate: ((CLLocation) -> Void)?
+
+    /// Maximum age for cached location to be considered fresh (3 minutes)
+    private let maxLocationAge: TimeInterval = 3 * 60
 
     /// Distance filter for continuous updates (reduces background GPS wake)
     private let backgroundDistanceFilter: CLLocationDistance = 40
@@ -82,19 +85,19 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        currentLocation = locations.last
+        guard let location = locations.last else { return }
+        currentLocation = location
 
         #if DEBUG
-        if let location = locations.last {
-            let age = Date().timeIntervalSince(location.timestamp)
-            print("LocationManager: didUpdateLocations age=\(String(format: "%.1f", age))s")
-        }
+        let age = Date().timeIntervalSince(location.timestamp)
+        print("LocationManager: didUpdateLocations age=\(String(format: "%.1f", age))s")
         #endif
 
-        // Resume continuation if waiting for fresh location
+        onBackgroundLocationUpdate?(location)
+
         if let continuation = locationContinuation {
             locationContinuation = nil
-            continuation.resume(returning: locations.last)
+            continuation.resume(returning: location)
         }
     }
 

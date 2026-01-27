@@ -258,6 +258,9 @@ struct MainView: View {
                 triggerInitialCameraFit()
             }
         }
+        .onAppear {
+            setupBackgroundLocationCallback()
+        }
         .onChange(of: pendingCameraAction) { _, action in
             guard let action = action else { return }
             executeCameraAction(action)
@@ -668,6 +671,14 @@ struct MainView: View {
                 if case .error(let message) = result {
                     uploadMessage = message
                 }
+            }
+        }
+    }
+
+    private func setupBackgroundLocationCallback() {
+        locationManager.onBackgroundLocationUpdate = { _ in
+            if self.identityStore.autoShareEnabled && !getShareRecipients().isEmpty {
+                self.uploadCurrentLocationBackground(.cachedOkay)
             }
         }
     }
