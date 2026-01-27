@@ -1,0 +1,31 @@
+Share your location with friends—and only your friends.
+
+Coords lets you share your real-time location with the people you trust, using end-to-end encryption that keeps your whereabouts private from everyone else - including the server.
+
+How it works
+
+Add friends by scanning QR codes or sharing links. Your devices exchange cryptographic keys directly, so there's no server in the middle. When you share your location, it's encrypted on your device before it ever leaves. Only your friends can decrypt it.
+
+Privacy by design
+
+• End-to-end encrypted—the server only sees data it can't read
+• No accounts—your identity is just a cryptographic key
+• No tracking—we don't log who views whose location
+• No history—only your latest location is stored
+• Open source—audit the code yourself
+
+Features
+
+• See friends on a map in real-time
+• Share continuously or on-demand
+• Add friends via QR code or link
+• Works in the background
+• Clean, simple interface
+
+Why Coords?
+
+Other location-sharing apps require accounts, collect your data, and could expose your movements if breached. Coords is different. Even if the server were compromised, attackers would only find encrypted data they can't decrypt. Your location stays between you and your friends.
+
+Open source & self-hostable
+
+Coords is fully open source and supports federation, so you can run your own server no matter what server your friends use. The iOS app, Android app, server, and cryptographic core are all available for review at coord.is.

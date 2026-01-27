@@ -203,12 +203,16 @@
             pkgs.unzip
             pkgs.gdal
             (pkgs.python3.withPackages (ps: [ ps.shapely ]))
+            # Documentation
+            pkgs.typst
+            pkgs.source-sans
           ];
 
           shellHook = ''
             export ANDROID_HOME="${androidSdk}/libexec/android-sdk"
             export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/26.3.11579264"
             export JAVA_HOME="${pkgs.jdk17}"
+            export TYPST_FONT_PATHS="${pkgs.source-sans}/share/fonts/opentype"
           '';
         };
       }

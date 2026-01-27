@@ -123,7 +123,9 @@ class IdentityStore: ObservableObject {
         if serverUrl.contains(oldDomain) {
             let newUrl = serverUrl.replacingOccurrences(of: oldDomain, with: newDomain)
             setServerUrl(newUrl)
+            #if DEBUG
             print("Migrated user server URL to \(newUrl)")
+            #endif
         }
     }
 

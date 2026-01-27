@@ -42,15 +42,21 @@ class BackgroundSyncManager: NSObject, ObservableObject, CLLocationManagerDelega
 
         do {
             try BGTaskScheduler.shared.submit(request)
+            #if DEBUG
             print("BackgroundSync: Scheduled background refresh")
+            #endif
         } catch {
+            #if DEBUG
             print("BackgroundSync: Failed to schedule background refresh: \(error)")
+            #endif
         }
     }
 
     /// Handle the background refresh task
     private func handleBackgroundRefresh(task: BGAppRefreshTask) {
+        #if DEBUG
         print("BackgroundSync: Background refresh task started")
+        #endif
 
         // Schedule the next refresh
         scheduleBackgroundRefresh()
@@ -69,14 +75,18 @@ class BackgroundSyncManager: NSObject, ObservableObject, CLLocationManagerDelega
         Task {
             _ = await workTask.value
             task.setTaskCompleted(success: true)
+            #if DEBUG
             print("BackgroundSync: Background refresh task completed")
+            #endif
         }
     }
 
     /// Perform the background sync (upload + fetch)
     private func performBackgroundSync() async {
         guard identityStore.hasIdentity else {
+            #if DEBUG
             print("BackgroundSync: No identity, skipping sync")
+            #endif
             return
         }
 
@@ -87,12 +97,14 @@ class BackgroundSyncManager: NSObject, ObservableObject, CLLocationManagerDelega
 
         // Always fetch friend locations
         let result = await syncService.fetchTrackedFriends()
+        #if DEBUG
         switch result {
         case .success(let locations):
             print("BackgroundSync: Fetched \(locations.count) friend locations")
         case .error(let message):
             print("BackgroundSync: Fetch failed: \(message)")
         }
+        #endif
     }
 
     // MARK: - Significant Location Change
@@ -100,20 +112,26 @@ class BackgroundSyncManager: NSObject, ObservableObject, CLLocationManagerDelega
     /// Start monitoring for significant location changes
     func startMonitoringSignificantLocationChanges() {
         guard CLLocationManager.significantLocationChangeMonitoringAvailable() else {
+            #if DEBUG
             print("BackgroundSync: Significant location change monitoring not available")
+            #endif
             return
         }
 
         locationManager.startMonitoringSignificantLocationChanges()
         isMonitoringSignificantChanges = true
+        #if DEBUG
         print("BackgroundSync: Started monitoring significant location changes")
+        #endif
     }
 
     /// Stop monitoring for significant location changes
     func stopMonitoringSignificantLocationChanges() {
         locationManager.stopMonitoringSignificantLocationChanges()
         isMonitoringSignificantChanges = false
+        #if DEBUG
         print("BackgroundSync: Stopped monitoring significant location changes")
+        #endif
     }
 
     /// Request "Always" authorization for background location
@@ -130,11 +148,15 @@ class BackgroundSyncManager: NSObject, ObservableObject, CLLocationManagerDelega
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { return }
+        #if DEBUG
         print("BackgroundSync: Significant location change detected: \(location.coordinate)")
+        #endif
 
         // Only upload if auto-share is enabled
         guard identityStore.autoShareEnabled else {
+            #if DEBUG
             print("BackgroundSync: Auto-share disabled, skipping upload")
+            #endif
             return
         }
 
@@ -145,7 +167,9 @@ class BackgroundSyncManager: NSObject, ObservableObject, CLLocationManagerDelega
     }
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        #if DEBUG
         print("BackgroundSync: Authorization changed to \(manager.authorizationStatus.rawValue)")
+        #endif
 
         if manager.authorizationStatus == .authorizedAlways {
             // User granted "Always" permission - enable auto-share since that's the only
@@ -170,7 +194,9 @@ class BackgroundSyncManager: NSObject, ObservableObject, CLLocationManagerDelega
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        #if DEBUG
         print("BackgroundSync: Location error: \(error.localizedDescription)")
+        #endif
     }
 
     // MARK: - Location Upload
@@ -178,7 +204,9 @@ class BackgroundSyncManager: NSObject, ObservableObject, CLLocationManagerDelega
     private func uploadCurrentLocation() async {
         // Use shared LocationManager with cached-okay freshness to preserve BGTask execution time
         guard let location = await LocationManager.shared.requestLocation(.cachedOkay) else {
+            #if DEBUG
             print("BackgroundSync: Could not get current location")
+            #endif
             return
         }
 
@@ -188,7 +216,9 @@ class BackgroundSyncManager: NSObject, ObservableObject, CLLocationManagerDelega
     private func uploadLocation(_ location: CLLocation) async {
         let recipients = getShareRecipients()
         guard !recipients.isEmpty else {
+            #if DEBUG
             print("BackgroundSync: No share recipients, skipping upload")
+            #endif
             return
         }
 
@@ -200,11 +230,13 @@ class BackgroundSyncManager: NSObject, ObservableObject, CLLocationManagerDelega
             timestamp: UInt64(location.timestamp.timeIntervalSince1970 * 1000)
         )
 
+        #if DEBUG
         switch result {
         case .success:
             print("BackgroundSync: Location uploaded successfully")
         case .error(let message):
             print("BackgroundSync: Upload failed: \(message)")
         }
+        #endif
     }
 }

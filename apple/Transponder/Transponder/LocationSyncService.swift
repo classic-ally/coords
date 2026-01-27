@@ -148,7 +148,9 @@ class LocationSyncService {
             }
         } catch CoreError.StaleLocation {
             // Location is older than last upload, skip silently
+            #if DEBUG
             print("LocationSync: Skipping stale location upload")
+            #endif
             return .success
         } catch {
             return .error("Upload failed: \(error.localizedDescription)")

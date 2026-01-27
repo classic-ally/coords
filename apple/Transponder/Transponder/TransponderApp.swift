@@ -49,11 +49,15 @@ struct TransponderApp: App {
                 fromDomain: "transponder.bentley.sh",
                 toDomain: "coord.is"
             )
+            #if DEBUG
             if migrated > 0 {
                 print("Migrated \(migrated) friend(s) to coord.is")
             }
+            #endif
         } catch {
+            #if DEBUG
             print("Failed to initialize storage: \(error)")
+            #endif
         }
 
         // Migrate user's own server URL
