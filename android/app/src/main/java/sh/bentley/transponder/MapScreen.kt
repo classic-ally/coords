@@ -132,111 +132,6 @@ import androidx.compose.material.icons.filled.QrCode2
 
 
 // Colors for map annotations
-private const val SELF_COLOR = "#4285F4" // Google blue
-private const val FRIEND_COLOR = "#34A853" // Google green
-
-// Source and layer IDs for native layers
-private const val SOURCE_LOCATIONS = "locations-source"
-private const val SOURCE_SELECTED = "selected-source"
-private const val LAYER_ACCURACY = "accuracy-layer"
-private const val LAYER_DOTS = "dots-layer"
-private const val LAYER_SELECTED_LABEL = "selected-label-layer"
-
-// Camera animation
-private const val CAMERA_ANIMATION_DURATION_MS = 350
-
-// Marker icon size in pixels (for generated bitmaps)
-private const val MARKER_ICON_SIZE = 56
-
-/** Cache for generated friend marker icons, keyed by pubkey */
-private val markerIconCache = mutableMapOf<String, Bitmap>()
-
-/**
- * Generate a circular marker icon with an initial letter.
- */
-private fun generateMarkerIcon(
-    initial: String,
-    fillColor: Int,
-    strokeColor: Int = Color.WHITE,
-    textColor: Int = Color.WHITE
-): Bitmap {
-    val size = MARKER_ICON_SIZE
-    val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-    val canvas = Canvas(bitmap)
-
-    val centerX = size / 2f
-    val centerY = size / 2f
-    val radius = size / 2f - 4f // Leave room for stroke
-
-    // Fill circle
-    val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = fillColor
-        style = Paint.Style.FILL
-    }
-    canvas.drawCircle(centerX, centerY, radius, fillPaint)
-
-    // Stroke circle
-    val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = strokeColor
-        style = Paint.Style.STROKE
-        strokeWidth = 4f
-    }
-    canvas.drawCircle(centerX, centerY, radius, strokePaint)
-
-    // Draw initial letter
-    val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = textColor
-        textSize = size * 0.45f
-        typeface = Typeface.DEFAULT_BOLD
-        textAlign = Paint.Align.CENTER
-    }
-    // Center text vertically
-    val textY = centerY - (textPaint.descent() + textPaint.ascent()) / 2
-    canvas.drawText(initial, centerX, textY, textPaint)
-
-    return bitmap
-}
-
-/**
- * Get or create a marker icon for a friend using their name initial and color.
- */
-private fun getFriendMarkerIcon(pubkey: String, name: String, colorHex: String): Bitmap {
-    return markerIconCache.getOrPut(pubkey) {
-        val initial = name.firstOrNull()?.toString() ?: "?"
-        val color = Color.parseColor(colorHex)
-        generateMarkerIcon(initial, color)
-    }
-}
-
-/**
- * Generate self location marker (blue circle, no initial).
- */
-private fun generateSelfMarkerIcon(): Bitmap {
-    val size = MARKER_ICON_SIZE
-    val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-    val canvas = Canvas(bitmap)
-
-    val centerX = size / 2f
-    val centerY = size / 2f
-    val radius = size / 2f - 4f
-
-    // Fill circle (blue)
-    val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor(SELF_COLOR)
-        style = Paint.Style.FILL
-    }
-    canvas.drawCircle(centerX, centerY, radius, fillPaint)
-
-    // Stroke circle
-    val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.WHITE
-        style = Paint.Style.STROKE
-        strokeWidth = 4f
-    }
-    canvas.drawCircle(centerX, centerY, radius, strokePaint)
-
-    return bitmap
-}
 
 /** Pending camera actions for deferred execution after sheet layout */
 sealed class CameraAction {
@@ -290,21 +185,21 @@ fun MainScreen(
     val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val sheetPeekHeight = (configuration.screenHeightDp * 0.4f).dp
     val sheetPeekHeightPx = with(density) { sheetPeekHeight.toPx() }
+    val mapState = remember { MapScreenState.from(context, identityStore) }
 
     var selectedMapStyle by remember { mutableStateOf(MapStyle.BASIC) }
     var showStylePicker by remember { mutableStateOf(false) }
     var showServerUrlDialog by remember { mutableStateOf(false) }
     var showLocationSettings by remember { mutableStateOf(false) }
     var showProfile by remember { mutableStateOf(false) }
-    var isEditMode by remember { mutableStateOf(false) }
     var friendToDelete by remember { mutableStateOf<Friend?>(null) }
     var showDeleteConfirmation by remember { mutableStateOf(false) }
     var showEditFriendNameDialog by remember { mutableStateOf(false) }
     var showEditProfileNameDialog by remember { mutableStateOf(false) }
 
     // Exit edit mode on back press
-    BackHandler(enabled = isEditMode) {
-        isEditMode = false
+    BackHandler(enabled = mapState.isEditMode) {
+        mapState.isEditMode = false
     }
     var myName by remember { mutableStateOf(identityStore.displayName ?: "Me") }
 
@@ -334,11 +229,9 @@ fun MainScreen(
         )
     }
 
-    var currentLocation by remember { mutableStateOf<LatLng?>(null) }
     var currentLocationTimestamp by remember { mutableStateOf<Long?>(null) }
     var currentAccuracy by remember { mutableStateOf(0f) }
     var serverLocation by remember { mutableStateOf<LocationDisplayData?>(null) }
-    var showServerLocation by remember { mutableStateOf(false) }
     var isUploading by remember { mutableStateOf(false) }
     var isFetchingFriends by remember { mutableStateOf(false) }
     var isFetchingServerLocation by remember { mutableStateOf(false) }
@@ -351,7 +244,6 @@ fun MainScreen(
     var mapViewRef by remember { mutableStateOf<MapView?>(null) }
     var styleRef by remember { mutableStateOf<Style?>(null) }
     var currentStyleUrl by remember { mutableStateOf<String?>(null) }
-    val mapState = remember { MapScreenState.from(context, identityStore) }
     val friends = mapState.friends
     val selectedFriend = mapState.selectedFriend
 
@@ -394,7 +286,7 @@ fun MainScreen(
             if (identityStore.autoShareEnabled) {
                 val result = requestLocation(context, LocationFreshness.ALWAYS_FRESH, LocationSettings.from(identityStore))
                 result.location?.let { location ->
-                    currentLocation = LatLng(location.latitude, location.longitude)
+                    mapState.currentLocation = LatLng(location.latitude, location.longitude)
                     currentLocationTimestamp = location.time
                     currentAccuracy = location.accuracy
                     repo.push(location, result.source)
@@ -479,7 +371,7 @@ fun MainScreen(
             isInitialLocationLoading = true
             val result = requestLocation(context, LocationFreshness.CACHED_OKAY, LocationSettings.from(identityStore))
             result.location?.let { location ->
-                currentLocation = LatLng(location.latitude, location.longitude)
+                mapState.currentLocation = LatLng(location.latitude, location.longitude)
                 currentLocationTimestamp = location.time
                 currentAccuracy = location.accuracy
 
@@ -495,7 +387,7 @@ fun MainScreen(
     }
 
     // Update map annotations when location or friends change
-    LaunchedEffect(currentLocation, currentAccuracy, styleRef, friends) {
+    LaunchedEffect(mapState.currentLocation, currentAccuracy, styleRef, friends) {
         val style = styleRef ?: return@LaunchedEffect
 
         // Generate and add icons to the style for each friend
@@ -516,7 +408,7 @@ fun MainScreen(
         val dotFeatures = mutableListOf<Feature>()
 
         // Add self location
-        currentLocation?.let { loc ->
+        mapState.currentLocation?.let { loc ->
             val point = Point.fromLngLat(loc.longitude, loc.latitude)
             val feature = Feature.fromGeometry(point)
             feature.addStringProperty("type", "self")
@@ -686,7 +578,7 @@ fun MainScreen(
                 }
             }
             is CameraAction.CenterOnMyLocation -> {
-                val loc = currentLocation ?: return@LaunchedEffect
+                val loc = mapState.currentLocation ?: return@LaunchedEffect
                 // Use CameraPosition with bottom padding to offset the focal point
                 val cameraPosition = CameraPosition.Builder()
                     .target(loc)
@@ -774,7 +666,7 @@ fun MainScreen(
                 when {
                     showProfile -> {
                         // My profile view
-                        val currentLocationData = currentLocation?.let { loc ->
+                        val currentLocationData = mapState.currentLocation?.let { loc ->
                             LocationDisplayData(
                                 lat = loc.latitude,
                                 lng = loc.longitude,
@@ -788,7 +680,7 @@ fun MainScreen(
                             identityStore = identityStore,
                             currentLocation = currentLocationData,
                             serverLocation = serverLocation,
-                            showServerLocation = showServerLocation,
+                            showServerLocation = mapState.showServerLocation,
                             onShowServerLocationChange = { newValue ->
                                 if (isFetchingServerLocation) return@ProfileSheet
                                 scope.launch {
@@ -806,7 +698,7 @@ fun MainScreen(
                                                         timestamp = loc.timestamp.toLong(),
                                                         city = findNearestCityInRegion(loc.latitude, loc.longitude)
                                                     )
-                                                    showServerLocation = true
+                                                    mapState.showServerLocation = true
                                                 } else {
                                                     android.widget.Toast.makeText(context, "No location published yet", android.widget.Toast.LENGTH_SHORT).show()
                                                 }
@@ -818,10 +710,10 @@ fun MainScreen(
                                         isFetchingServerLocation = false
                                     } else {
                                         // Refresh current location when switching back to show it
-                                        showServerLocation = false
+                                        mapState.showServerLocation = false
                                         val result = requestLocation(context, LocationFreshness.CACHED_OKAY, LocationSettings.from(identityStore))
                                         result.location?.let { location ->
-                                            currentLocation = LatLng(location.latitude, location.longitude)
+                                            mapState.currentLocation = LatLng(location.latitude, location.longitude)
                                             currentLocationTimestamp = location.time
                                             currentAccuracy = location.accuracy
                                         }
@@ -867,7 +759,7 @@ fun MainScreen(
                                         return@launch
                                     }
                                     // Update current location state
-                                    currentLocation = LatLng(location.latitude, location.longitude)
+                                    mapState.currentLocation = LatLng(location.latitude, location.longitude)
                                     currentLocationTimestamp = location.time
                                     currentAccuracy = location.accuracy
 
@@ -967,7 +859,7 @@ fun MainScreen(
                                         }
                                     }
 
-                                    if (isEditMode) {
+                                    if (mapState.isEditMode) {
                                         // Refresh button in edit mode
                                         IconButton(
                                             onClick = {
@@ -990,7 +882,7 @@ fun MainScreen(
                                             }
                                         }
                                         // Done editing
-                                        IconButton(onClick = { isEditMode = false }) {
+                                        IconButton(onClick = { mapState.isEditMode = false }) {
                                             Icon(
                                                 imageVector = Icons.Default.Check,
                                                 contentDescription = "Done editing"
@@ -1018,7 +910,7 @@ fun MainScreen(
                                             )
                                         }
                                         // Edit mode toggle
-                                        IconButton(onClick = { isEditMode = true }) {
+                                        IconButton(onClick = { mapState.isEditMode = true }) {
                                             Icon(
                                                 imageVector = Icons.Default.Edit,
                                                 contentDescription = "Edit friends"
@@ -1043,12 +935,12 @@ fun MainScreen(
 
                             FriendList(
                                 items = friendsWithCities,
-                                currentLocation = currentLocation,
-                                isEditMode = isEditMode,
+                                currentLocation = mapState.currentLocation,
+                                isEditMode = mapState.isEditMode,
                                 modifier = Modifier.weight(1f),
                                 bottomPadding = listBottomPadding,
                                 onClick = { friend ->
-                                    if (!isEditMode) {
+                                    if (!mapState.isEditMode) {
                                         friend.location?.let { loc ->
                                             selectAndCenterOnFriend(friend.pubkey, loc.latitude, loc.longitude)
                                         }
