@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     id("com.mikepenz.aboutlibraries.plugin") version "11.2.3"
+    id("io.github.takahirom.roborazzi") version "1.46.1"
 }
 
 val localProperties = Properties().apply {
@@ -78,6 +79,12 @@ android {
         buildConfig = true
     }
 
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+        }
+    }
+
     splits {
         abi {
             isEnable = true
@@ -113,6 +120,13 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
     testImplementation("io.mockk:mockk:1.13.13")
+    testImplementation("org.robolectric:robolectric:4.16.1")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi:1.46.1")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi-compose:1.46.1")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi-junit-rule:1.46.1")
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.compose.ui.test.junit4)
+    testImplementation(libs.androidx.compose.ui.test.manifest)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
