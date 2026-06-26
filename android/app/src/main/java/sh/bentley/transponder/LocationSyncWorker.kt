@@ -12,7 +12,6 @@ import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
-import uniffi.transponder_core.getShareRecipients
 import uniffi.transponder_core.getFetchTargets
 import java.util.concurrent.TimeUnit
 
@@ -108,13 +107,18 @@ class LocationSyncWorker(
             return Result.success()
         }
 
-        // Upload location if auto-share is enabled and we have friends to share with
+        // Upload location if auto-share is enabled (repo skips when no recipients)
         if (identityStore.autoShareEnabled) {
-            val shareRecipients = getShareRecipients()
-            if (shareRecipients.isNotEmpty()) {
-                uploadLocation(syncService, identityStore)
-            } else {
-                Log.d(TAG, "No share recipients, skipping upload")
+            val repo = LocationRepository.from(applicationContext, identityStore)
+            when (val r = repo.syncNow(LocationFreshness.CACHED_OKAY)) {
+                is LocationRepository.Result.Uploaded ->
+                    Log.d(TAG, "Location uploaded successfully")
+                is LocationRepository.Result.Skipped ->
+                    Log.d(TAG, "No share recipients, skipping upload")
+                is LocationRepository.Result.NoLocation ->
+                    Log.w(TAG, "Failed to get location for upload")
+                is LocationRepository.Result.Error ->
+                    Log.w(TAG, "Failed to upload location: ${r.message}")
             }
         } else {
             Log.d(TAG, "Auto-share disabled, skipping upload")
@@ -130,38 +134,6 @@ class LocationSyncWorker(
 
         Log.d(TAG, "Location sync work completed")
         return Result.success()
-    }
-
-    private suspend fun uploadLocation(syncService: LocationSyncService, identityStore: IdentityStore) {
-        Log.d(TAG, "Requesting location for upload...")
-
-        val locationResult = requestLocation(applicationContext, LocationFreshness.CACHED_OKAY, LocationSettings.from(identityStore))
-
-        if (locationResult.location == null) {
-            Log.w(TAG, "Failed to get location: ${locationResult.error ?: "unknown error"}")
-            return
-        }
-
-        val location = locationResult.location
-        Log.d(TAG, "Got location: ${location.latitude}, ${location.longitude} " +
-                "(accuracy: ${location.accuracy}m, source: ${locationResult.source})")
-
-        val result = syncService.uploadLocation(
-            latitude = location.latitude,
-            longitude = location.longitude,
-            altitude = location.altitude,
-            accuracy = location.accuracy,
-            timestamp = location.time
-        )
-
-        when (result) {
-            is LocationSyncService.UploadResult.Success -> {
-                Log.d(TAG, "Location uploaded successfully")
-            }
-            is LocationSyncService.UploadResult.Error -> {
-                Log.w(TAG, "Failed to upload location: ${result.message}")
-            }
-        }
     }
 
     private suspend fun fetchFriendLocations(syncService: LocationSyncService) {

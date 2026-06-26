@@ -659,6 +659,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Short
     external fun uniffi_transponder_core_checksum_func_get_identity_color(
     ): Short
+    external fun uniffi_transponder_core_checksum_func_get_last_upload_timestamp(
+    ): Short
     external fun uniffi_transponder_core_checksum_func_get_licenses(
     ): Short
     external fun uniffi_transponder_core_checksum_func_get_share_recipients(
@@ -730,6 +732,8 @@ external fun uniffi_transponder_core_fn_func_get_fetch_targets(uniffi_out_err: U
 ): RustBuffer.ByValue
 external fun uniffi_transponder_core_fn_func_get_identity_color(`identity`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
+external fun uniffi_transponder_core_fn_func_get_last_upload_timestamp(uniffi_out_err: UniffiRustCallStatus, 
+): Long
 external fun uniffi_transponder_core_fn_func_get_licenses(uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 external fun uniffi_transponder_core_fn_func_get_share_recipients(uniffi_out_err: UniffiRustCallStatus, 
@@ -918,6 +922,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_transponder_core_checksum_func_get_identity_color() != 53474.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_transponder_core_checksum_func_get_last_upload_timestamp() != 4870.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_transponder_core_checksum_func_get_licenses() != 45088.toShort()) {
@@ -2430,6 +2437,19 @@ public object FfiConverterMapStringString: FfiConverterRustBuffer<Map<kotlin.Str
     UniffiLib.uniffi_transponder_core_fn_func_get_identity_color(
     
         FfiConverterTypeIdentity.lower(`identity`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Last successful upload timestamp (ms epoch), or 0 if never uploaded.
+         */ fun `getLastUploadTimestamp`(): kotlin.ULong {
+            return FfiConverterULong.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_transponder_core_fn_func_get_last_upload_timestamp(
+    
+        _status)
 }
     )
     }

@@ -1065,6 +1065,12 @@ pub fn mark_upload_success(timestamp: u64) {
     save_last_upload_timestamp(timestamp);
 }
 
+/// Last successful upload timestamp (ms epoch), or 0 if never uploaded.
+#[uniffi::export]
+pub fn get_last_upload_timestamp() -> u64 {
+    load_last_upload_timestamp()
+}
+
 // =============================================================================
 // Friend Link Generation & Parsing
 // =============================================================================

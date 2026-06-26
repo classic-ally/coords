@@ -3,6 +3,7 @@ package sh.bentley.transponder
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import android.graphics.Color
 import androidx.compose.ui.graphics.Color as ComposeColor
 import android.graphics.PointF
@@ -113,7 +114,6 @@ import uniffi.transponder_core.generateFriendLink
 import uniffi.transponder_core.getLicenses
 import uniffi.transponder_core.getVersion
 import uniffi.transponder_core.listFriends
-import uniffi.transponder_core.getShareRecipients
 import uniffi.transponder_core.mockFriends as coreMockFriends
 import uniffi.transponder_core.findNearestCityInRegion
 import uniffi.transponder_core.City
@@ -383,6 +383,7 @@ fun MainScreen(
     }
 
     val locationSyncService = remember { LocationSyncService(identityStore) }
+    val repo = remember { LocationRepository.from(context.applicationContext, identityStore) }
 
     // Helper function to refresh friends from storage
     fun refreshFriends() {
@@ -426,20 +427,14 @@ fun MainScreen(
             kotlinx.coroutines.delay(60_000)
             fetchFriendsIfNeeded(force = true)
 
-            // Periodic upload if auto-share enabled
-            if (identityStore.autoShareEnabled && getShareRecipients().isNotEmpty()) {
+            // Periodic upload if auto-share enabled (repo skips when no recipients)
+            if (identityStore.autoShareEnabled) {
                 val result = requestLocation(context, LocationFreshness.ALWAYS_FRESH, LocationSettings.from(identityStore))
                 result.location?.let { location ->
                     currentLocation = LatLng(location.latitude, location.longitude)
                     currentLocationTimestamp = location.time
                     currentAccuracy = location.accuracy
-                    locationSyncService.uploadLocation(
-                        latitude = location.latitude,
-                        longitude = location.longitude,
-                        altitude = location.altitude,
-                        accuracy = location.accuracy,
-                        timestamp = location.time
-                    )
+                    repo.push(location, result.source)
                 }
             }
         }
@@ -487,6 +482,20 @@ fun MainScreen(
         }
     }
 
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { }
+
+    fun requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(
+                context, Manifest.permission.POST_NOTIFICATIONS
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
@@ -500,6 +509,7 @@ fun MainScreen(
                 autoShareEnabled = true
                 identityStore.autoShareEnabled = true
                 pendingAutoShareEnable = false
+                requestNotificationPermissionIfNeeded()
             }
             LocationSyncWorker.schedule(context)
         } else if (pendingAutoShareEnable) {
@@ -518,15 +528,9 @@ fun MainScreen(
                 currentLocationTimestamp = location.time
                 currentAccuracy = location.accuracy
 
-                // Auto-upload on app launch if enabled and we have share recipients
-                if (identityStore.autoShareEnabled && getShareRecipients().isNotEmpty()) {
-                    locationSyncService.uploadLocation(
-                        latitude = location.latitude,
-                        longitude = location.longitude,
-                        altitude = location.altitude,
-                        accuracy = location.accuracy,
-                        timestamp = location.time
-                    )
+                // Auto-upload on app launch if enabled (repo skips when no recipients)
+                if (identityStore.autoShareEnabled) {
+                    repo.push(location, result.source)
                 }
             }
             isInitialLocationLoading = false
@@ -878,6 +882,7 @@ fun MainScreen(
                                         autoShareEnabled = true
                                         identityStore.autoShareEnabled = true
                                         LocationSyncWorker.schedule(context)
+                                        requestNotificationPermissionIfNeeded()
                                     } else {
                                         // Need to request permission
                                         pendingAutoShareEnable = true
@@ -909,15 +914,8 @@ fun MainScreen(
                                     currentLocationTimestamp = location.time
                                     currentAccuracy = location.accuracy
 
-                                    val result = locationSyncService.uploadLocation(
-                                        latitude = location.latitude,
-                                        longitude = location.longitude,
-                                        altitude = location.altitude,
-                                        accuracy = location.accuracy,
-                                        timestamp = location.time
-                                    )
-                                    when (result) {
-                                        is LocationSyncService.UploadResult.Success -> {
+                                    when (val r = repo.push(location, locationResult.source)) {
+                                        is LocationRepository.Result.Uploaded -> {
                                             // Update server location to match what we uploaded
                                             serverLocation = LocationDisplayData(
                                                 lat = location.latitude,
@@ -927,9 +925,13 @@ fun MainScreen(
                                                 city = findNearestCityInRegion(location.latitude, location.longitude)
                                             )
                                         }
-                                        is LocationSyncService.UploadResult.Error -> {
-                                            android.widget.Toast.makeText(context, result.message, android.widget.Toast.LENGTH_SHORT).show()
+                                        is LocationRepository.Result.Skipped -> {
+                                            android.widget.Toast.makeText(context, "No friends to share with", android.widget.Toast.LENGTH_SHORT).show()
                                         }
+                                        is LocationRepository.Result.Error -> {
+                                            android.widget.Toast.makeText(context, r.message, android.widget.Toast.LENGTH_SHORT).show()
+                                        }
+                                        is LocationRepository.Result.NoLocation -> {}
                                     }
                                     isUploading = false
                                 }

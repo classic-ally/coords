@@ -250,11 +250,28 @@ private fun LocationPermissionPage(
         // If granted, UI will update to show background permission option
     }
 
+    // Notification permission launcher (Android 13+) — needed so the
+    // background upload foreground service can show its ongoing notification.
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { _ ->
+        onPermissionResult(true, true)
+    }
+
     // Background permission launcher (Android 10+)
     val backgroundPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
-        onPermissionResult(true, granted)
+        val needsNotificationPermission = granted &&
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                ContextCompat.checkSelfPermission(
+                    context, Manifest.permission.POST_NOTIFICATIONS
+                ) != PackageManager.PERMISSION_GRANTED
+        if (needsNotificationPermission) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            onPermissionResult(true, granted)
+        }
     }
 
     Column(
