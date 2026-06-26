@@ -23,6 +23,7 @@ import android.text.format.DateFormat
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import uniffi.transponder_core.getShareRecipients
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -43,6 +44,27 @@ class LocationUploadService : Service() {
         private const val NOTIFICATION_ID = 1
         private const val MIN_TIME_MS = 180_000L  // 3 minutes
         private const val MIN_DISTANCE_M = 40f    // 40 meters
+
+        /** Gate: should the upload service be running right now? */
+        fun shouldRun(context: Context): Boolean {
+            val store = IdentityStore(context)
+            return store.autoShareEnabled &&
+                LocationSyncWorker.hasBackgroundLocationPermission(context) &&
+                getShareRecipients().isNotEmpty()
+        }
+
+        /**
+         * Reconcile run state. Must be called from a foreground context (FGS start is
+         * illegal from the background). Starts or stops the service per [shouldRun].
+         */
+        fun poke(context: Context) {
+            val intent = Intent(context, LocationUploadService::class.java)
+            if (shouldRun(context)) {
+                ContextCompat.startForegroundService(context, intent)
+            } else {
+                context.stopService(intent)
+            }
+        }
     }
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -61,7 +83,10 @@ class LocationUploadService : Service() {
     private val listener = object : LocationListener {
         override fun onLocationChanged(location: Location) {
             Log.d(TAG, "Location changed: ${location.latitude}, ${location.longitude} (accuracy: ${location.accuracy}m)")
-            serviceScope.launch { repo.push(location, currentProvider ?: "service") }
+            serviceScope.launch {
+                repo.push(location, currentProvider ?: "service")
+                if (!shouldRun(this@LocationUploadService)) stopSelf()
+            }
         }
 
         override fun onProviderEnabled(provider: String) {
@@ -92,6 +117,11 @@ class LocationUploadService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "Service starting")
+
+        if (!shouldRun(this)) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
 
         // Start as foreground service with notification
         val notification = createNotification()

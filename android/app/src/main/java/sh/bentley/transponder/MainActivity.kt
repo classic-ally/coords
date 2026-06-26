@@ -3,7 +3,6 @@ package sh.bentley.transponder
 import android.content.Intent
 import android.location.Location
 import android.os.Bundle
-import androidx.core.content.ContextCompat
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -20,7 +19,6 @@ import sh.bentley.transponder.ui.theme.TransponderTheme
 import uniffi.transponder_core.initStorage
 import uniffi.transponder_core.migrateServerUrls
 import uniffi.transponder_core.parseFriendLink
-import uniffi.transponder_core.getShareRecipients
 
 class MainActivity : ComponentActivity() {
     private lateinit var identityStore: IdentityStore
@@ -179,20 +177,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        updateLocationService()
-    }
-
-    private fun updateLocationService() {
-        val shouldRun = identityStore.autoShareEnabled &&
-                LocationSyncWorker.hasBackgroundLocationPermission(this) &&
-                getShareRecipients().isNotEmpty()
-
-        val intent = Intent(this, LocationUploadService::class.java)
-        if (shouldRun) {
-            ContextCompat.startForegroundService(this, intent)
-        } else {
-            stopService(intent)
-        }
+        LocationUploadService.poke(this)
     }
 }
 

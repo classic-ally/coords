@@ -510,6 +510,7 @@ fun MainScreen(
                 identityStore.autoShareEnabled = true
                 pendingAutoShareEnable = false
                 requestNotificationPermissionIfNeeded()
+                LocationUploadService.poke(context)
             }
             LocationSyncWorker.schedule(context)
         } else if (pendingAutoShareEnable) {
@@ -883,6 +884,7 @@ fun MainScreen(
                                         identityStore.autoShareEnabled = true
                                         LocationSyncWorker.schedule(context)
                                         requestNotificationPermissionIfNeeded()
+                                        LocationUploadService.poke(context)
                                     } else {
                                         // Need to request permission
                                         pendingAutoShareEnable = true
@@ -895,6 +897,7 @@ fun MainScreen(
                                     autoShareEnabled = false
                                     identityStore.autoShareEnabled = false
                                     LocationSyncWorker.cancel(context)
+                                    LocationUploadService.poke(context)
                                 }
                             },
                             isUploading = isUploading,
@@ -995,6 +998,7 @@ fun MainScreen(
                                     uniffi.transponder_core.removeFriend(selectedFriend!!.pubkey)
                                     selectedFriendPubkey = null
                                     refreshFriends()
+                                    LocationUploadService.poke(context)
                                     pendingCameraAction = CameraAction.FitAllFriends
                                 } catch (e: Exception) {
                                     e.printStackTrace()
@@ -1402,6 +1406,7 @@ fun MainScreen(
                                 try {
                                     uniffi.transponder_core.removeFriend(friend.pubkey)
                                     refreshFriends()
+                                    LocationUploadService.poke(context)
                                 } catch (e: Exception) {
                                     e.printStackTrace()
                                 }
@@ -1496,6 +1501,8 @@ fun MainScreen(
                             }
                             // Refresh friends list
                             friends = uniffi.transponder_core.listFriends()
+                            // New recipient may flip the gate; start the service now
+                            LocationUploadService.poke(context)
                         } catch (e: Exception) {
                             e.printStackTrace()
                         }
