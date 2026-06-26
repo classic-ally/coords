@@ -106,13 +106,10 @@ import uniffi.transponder_core.Friend
 import uniffi.transponder_core.Location as CoreLocation
 import uniffi.transponder_core.Identity
 import uniffi.transponder_core.generateFriendLink
-import uniffi.transponder_core.listFriends
-import uniffi.transponder_core.mockFriends as coreMockFriends
 import uniffi.transponder_core.findNearestCityInRegion
 import uniffi.transponder_core.City
 import sh.bentley.transponder.components.FriendRow
 import sh.bentley.transponder.components.FriendList
-import sh.bentley.transponder.components.FriendDisplayData
 import sh.bentley.transponder.components.SheetHeader
 import sh.bentley.transponder.components.QrCodeView
 import sh.bentley.transponder.sheets.FriendDetailSheet
@@ -275,7 +272,6 @@ enum class MapStyle(val displayName: String, val lightUrl: String, val darkUrl: 
 }
 
 // Mock friends for UI development - calls Rust core for consistent data
-private fun mockFriends(): List<Friend> = coreMockFriends()
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
@@ -299,7 +295,6 @@ fun MainScreen(
     var showStylePicker by remember { mutableStateOf(false) }
     var showServerUrlDialog by remember { mutableStateOf(false) }
     var showLocationSettings by remember { mutableStateOf(false) }
-    var selectedFriendPubkey by remember { mutableStateOf<String?>(null) }
     var showProfile by remember { mutableStateOf(false) }
     var isEditMode by remember { mutableStateOf(false) }
     var friendToDelete by remember { mutableStateOf<Friend?>(null) }
@@ -356,40 +351,15 @@ fun MainScreen(
     var mapViewRef by remember { mutableStateOf<MapView?>(null) }
     var styleRef by remember { mutableStateOf<Style?>(null) }
     var currentStyleUrl by remember { mutableStateOf<String?>(null) }
-    var friends by remember {
-        mutableStateOf(
-            try {
-                val realFriends = listFriends()
-                if (realFriends.isEmpty() && BuildConfig.USE_MOCK_FRIENDS) {
-                    mockFriends()
-                } else {
-                    realFriends
-                }
-            } catch (e: Exception) {
-                if (BuildConfig.USE_MOCK_FRIENDS) mockFriends() else emptyList()
-            }
-        )
-    }
-    // Derive selectedFriend from the friends list so it stays in sync
-    val selectedFriend: Friend? = selectedFriendPubkey?.let { pubkey ->
-        friends.find { it.pubkey == pubkey }
-    }
+    val mapState = remember { MapScreenState.from(context, identityStore) }
+    val friends = mapState.friends
+    val selectedFriend = mapState.selectedFriend
 
     val locationSyncService = remember { LocationSyncService(identityStore) }
     val repo = remember { LocationRepository.from(context.applicationContext, identityStore) }
 
-    // Helper function to refresh friends from storage
     fun refreshFriends() {
-        friends = try {
-            val realFriends = listFriends()
-            if (realFriends.isEmpty() && BuildConfig.USE_MOCK_FRIENDS) {
-                mockFriends()
-            } else {
-                realFriends
-            }
-        } catch (e: Exception) {
-            if (BuildConfig.USE_MOCK_FRIENDS) mockFriends() else emptyList()
-        }
+        mapState.refreshFriends()
     }
 
     // Debounced friend location fetching
@@ -464,16 +434,7 @@ fun MainScreen(
     }
 
     // Precompute cities once, recompute only when friends change
-    val friendsWithCities = remember(friends) {
-        friends.map { friend ->
-            FriendDisplayData(
-                friend = friend,
-                city = friend.location?.let { loc ->
-                    findNearestCityInRegion(loc.latitude, loc.longitude)
-                }
-            )
-        }
-    }
+    val friendsWithCities = mapState.friendsWithCities
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -780,7 +741,7 @@ fun MainScreen(
 
         // Helper to select a friend, center map, and show detail sheet
         fun selectAndCenterOnFriend(pubkey: String, lat: Double, lng: Double) {
-            selectedFriendPubkey = pubkey
+            mapState.selectedFriendPubkey = pubkey
             pendingCameraAction = CameraAction.CenterOn(LatLng(lat, lng))
             scope.launch { sheetState.animateToAnchor(SheetAnchor.Partial) }
         }
@@ -797,8 +758,8 @@ fun MainScreen(
             if (showProfile) {
                 showProfile = false
                 pendingCameraAction = CameraAction.FitAllFriends
-            } else if (selectedFriendPubkey != null) {
-                selectedFriendPubkey = null
+            } else if (mapState.selectedFriendPubkey != null) {
+                mapState.selectedFriendPubkey = null
                 pendingCameraAction = CameraAction.FitAllFriends
             }
         }
@@ -954,48 +915,17 @@ fun MainScreen(
                         FriendDetailSheet(
                             friend = selectedFriend!!,
                             onDismiss = {
-                                selectedFriendPubkey = null
+                                mapState.selectedFriendPubkey = null
                                 pendingCameraAction = CameraAction.FitAllFriends
                             },
                             onNameEdit = {
                                 showEditFriendNameDialog = true
                             },
-                            onToggleShare = {
-                                try {
-                                    uniffi.transponder_core.updateFriend(
-                                        selectedFriend!!.pubkey,
-                                        !selectedFriend!!.shareWith,
-                                        null,
-                                        null
-                                    )
-                                    refreshFriends()
-                                } catch (e: Exception) {
-                                    e.printStackTrace()
-                                }
-                            },
-                            onToggleFetch = {
-                                try {
-                                    uniffi.transponder_core.updateFriend(
-                                        selectedFriend!!.pubkey,
-                                        null,
-                                        !selectedFriend!!.fetchFrom,
-                                        null
-                                    )
-                                    refreshFriends()
-                                } catch (e: Exception) {
-                                    e.printStackTrace()
-                                }
-                            },
+                            onToggleShare = { mapState.toggleShare(selectedFriend!!) },
+                            onToggleFetch = { mapState.toggleFetch(selectedFriend!!) },
                             onDelete = {
-                                try {
-                                    uniffi.transponder_core.removeFriend(selectedFriend!!.pubkey)
-                                    selectedFriendPubkey = null
-                                    refreshFriends()
-                                    LocationUploadService.poke(context)
-                                    pendingCameraAction = CameraAction.FitAllFriends
-                                } catch (e: Exception) {
-                                    e.printStackTrace()
-                                }
+                                mapState.deleteFriend(selectedFriend!!)
+                                pendingCameraAction = CameraAction.FitAllFriends
                             }
                         )
                     }
@@ -1124,22 +1054,8 @@ fun MainScreen(
                                         }
                                     }
                                 },
-                                onToggleShare = { friend ->
-                                    try {
-                                        uniffi.transponder_core.updateFriend(friend.pubkey, !friend.shareWith, null, null)
-                                        refreshFriends()
-                                    } catch (e: Exception) {
-                                        e.printStackTrace()
-                                    }
-                                },
-                                onToggleFetch = { friend ->
-                                    try {
-                                        uniffi.transponder_core.updateFriend(friend.pubkey, null, !friend.fetchFrom, null)
-                                        refreshFriends()
-                                    } catch (e: Exception) {
-                                        e.printStackTrace()
-                                    }
-                                },
+                                onToggleShare = { friend -> mapState.toggleShare(friend) },
+                                onToggleFetch = { friend -> mapState.toggleFetch(friend) },
                                 onDelete = { friend ->
                                     friendToDelete = friend
                                     showDeleteConfirmation = true
@@ -1190,7 +1106,7 @@ fun MainScreen(
                                         }
                                         true
                                     } else {
-                                        selectedFriendPubkey = null
+                                        mapState.selectedFriendPubkey = null
                                         false
                                     }
                                 }
@@ -1379,15 +1295,7 @@ fun MainScreen(
                 confirmButton = {
                     TextButton(
                         onClick = {
-                            friendToDelete?.let { friend ->
-                                try {
-                                    uniffi.transponder_core.removeFriend(friend.pubkey)
-                                    refreshFriends()
-                                    LocationUploadService.poke(context)
-                                } catch (e: Exception) {
-                                    e.printStackTrace()
-                                }
-                            }
+                            friendToDelete?.let { friend -> mapState.deleteFriend(friend) }
                             showDeleteConfirmation = false
                             friendToDelete = null
                         }
@@ -1477,7 +1385,7 @@ fun MainScreen(
                                 else -> {}
                             }
                             // Refresh friends list
-                            friends = uniffi.transponder_core.listFriends()
+                            refreshFriends()
                             // New recipient may flip the gate; start the service now
                             LocationUploadService.poke(context)
                         } catch (e: Exception) {
@@ -1486,13 +1394,13 @@ fun MainScreen(
                     }
                 },
                 onComplete = {
-                    friends = uniffi.transponder_core.listFriends()
+                    refreshFriends()
                     addFriendLocationDeferred = null  // Clear on dismiss too
                     // Fetch friend locations in background - they may have uploaded when adding us
                     scope.launch {
                         val syncService = LocationSyncService(identityStore)
                         syncService.fetchTrackedFriends()
-                        friends = uniffi.transponder_core.listFriends()
+                        refreshFriends()
                     }
                 },
                 onDismiss = {
