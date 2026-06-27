@@ -1,9 +1,13 @@
 package sh.bentley.transponder
 
+import android.location.Location as AndroidLocation
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -28,6 +32,14 @@ private fun friend(
     color = "#4A90D9"
 )
 
+private fun androidLocation(lat: Double = 51.0, lng: Double = -1.0, acc: Float = 5f, time: Long = 1_000L) =
+    mockk<AndroidLocation>(relaxed = true) {
+        every { latitude } returns lat
+        every { longitude } returns lng
+        every { accuracy } returns acc
+        every { this@mockk.time } returns time
+    }
+
 class MapScreenStateTest {
 
     // Should: seed the friends list from the core list seam at construction
@@ -35,15 +47,7 @@ class MapScreenStateTest {
     @Test
     fun seeds_state_from_seams_at_construction() {
         val seed = listOf(friend("Alex"))
-        val state = MapScreenState(
-            listFriends = { seed },
-            updateFriend = mockk(relaxed = true),
-            removeFriend = mockk(relaxed = true),
-            getAutoSharePref = { true },
-            setAutoSharePref = mockk(relaxed = true),
-            onGateChanged = mockk(relaxed = true),
-            cityFor = { _, _ -> null }
-        )
+        val state = newState(listFriends = { seed }, autoShare = true)
         assertEquals(seed, state.friends)
         assertTrue(state.autoShareEnabled)
     }
@@ -64,6 +68,38 @@ class MapScreenStateTest {
         verify { onGate() }
     }
 
+    // Should: enable auto-share, schedule the periodic worker, and poke the service gate
+    @Test
+    fun set_auto_share_granted_schedules_worker_and_pokes() {
+        val setPref: (Boolean) -> Unit = mockk(relaxed = true)
+        val schedule: () -> Unit = mockk(relaxed = true)
+        val onGate: () -> Unit = mockk(relaxed = true)
+        val state = newState(setAutoSharePref = setPref, scheduleWorker = schedule, onGateChanged = onGate)
+
+        state.setAutoShareGranted()
+
+        assertTrue(state.autoShareEnabled)
+        verify { setPref(true) }
+        verify { schedule() }
+        verify { onGate() }
+    }
+
+    // Should: disable auto-share, cancel the periodic worker, and poke the gate to stop the service
+    @Test
+    fun disable_auto_share_cancels_worker_and_pokes() {
+        val setPref: (Boolean) -> Unit = mockk(relaxed = true)
+        val cancel: () -> Unit = mockk(relaxed = true)
+        val onGate: () -> Unit = mockk(relaxed = true)
+        val state = newState(setAutoSharePref = setPref, cancelWorker = cancel, onGateChanged = onGate, autoShare = true)
+
+        state.disableAutoShare()
+
+        assertFalse(state.autoShareEnabled)
+        verify { setPref(false) }
+        verify { cancel() }
+        verify { onGate() }
+    }
+
     // Impact: the flag is negated before the core write; a sign slip would toggle the wrong direction
     // Should: write the negated shareWith flag for the friend, leaving fetch and name null
     // Should: refresh the friends list from core after the write
@@ -73,7 +109,7 @@ class MapScreenStateTest {
         val list: () -> List<Friend> = mockk()
         val f = friend("Alex", share = true)
         every { list() } returns listOf(f)
-        val state = MapScreenState(list, update, mockk(relaxed = true), { false }, mockk(relaxed = true), mockk(relaxed = true)) { _, _ -> null }
+        val state = newState(listFriends = list, updateFriend = update)
 
         state.toggleShare(f)
 
@@ -89,7 +125,7 @@ class MapScreenStateTest {
         val list: () -> List<Friend> = mockk()
         val f = friend("Sam", fetch = false)
         every { list() } returns listOf(f)
-        val state = MapScreenState(list, update, mockk(relaxed = true), { false }, mockk(relaxed = true), mockk(relaxed = true)) { _, _ -> null }
+        val state = newState(listFriends = list, updateFriend = update)
 
         state.toggleFetch(f)
 
@@ -105,11 +141,10 @@ class MapScreenStateTest {
         val remove: (String) -> Unit = mockk(relaxed = true)
         val onGate: () -> Unit = mockk(relaxed = true)
         val list: () -> List<Friend> = mockk()
-        val f = friend("Jo")
         every { list() } returns emptyList()
-        val state = MapScreenState(list, mockk(relaxed = true), remove, { false }, mockk(relaxed = true), onGate) { _, _ -> null }
+        val state = newState(listFriends = list, removeFriend = remove, onGateChanged = onGate)
 
-        state.deleteFriend(f)
+        state.deleteFriend(friend("Jo"))
 
         verify { remove("pk-Jo") }
         verify { onGate() }
@@ -148,7 +183,7 @@ class MapScreenStateTest {
         val second = listOf(friend("Alex"), friend("Sam"))
         val list: () -> List<Friend> = mockk()
         every { list() } returnsMany listOf(first, second)
-        val state = MapScreenState(list, mockk(relaxed = true), mockk(relaxed = true), { false }, mockk(relaxed = true), mockk(relaxed = true)) { _, _ -> null }
+        val state = newState(listFriends = list)
         assertEquals(first, state.friends)
 
         state.refreshFriends()
@@ -221,6 +256,55 @@ class MapScreenStateTest {
         assertEquals(42.0, state.mapBearing, 0.0)
     }
 
+    // Should: report NoLocation and not attempt an upload when no fix is available
+    // Should not: leave isUploading stuck true after bailing
+    @Test
+    fun upload_now_bails_when_no_fix() = runTest {
+        val push: suspend (AndroidLocation, String) -> LocationRepository.Result = mockk(relaxed = true)
+        val acquire: suspend (LocationFreshness) -> LocationRequestResult =
+            { LocationRequestResult(null, "none", 0, false) }
+        val state = newState(acquireLocation = acquire, push = push)
+
+        val result = state.uploadNow()
+
+        assertEquals(LocationRepository.Result.NoLocation, result)
+        assertFalse(state.isUploading)
+    }
+
+    // Should: push the freshly acquired fix and record it as the server location on success
+    // Should not: leave isUploading true after completing
+    @Test
+    fun upload_now_pushes_fix_and_sets_server_location() = runTest {
+        val loc = androidLocation(lat = 45.5, lng = -73.6, time = 7_000L)
+        val acquire: suspend (LocationFreshness) -> LocationRequestResult =
+            { LocationRequestResult(loc, "gps", 0, false) }
+        val push: suspend (AndroidLocation, String) -> LocationRepository.Result = mockk()
+        coEvery { push(loc, "gps") } returns LocationRepository.Result.Uploaded(7_000L, "gps")
+        val state = newState(acquireLocation = acquire, push = push)
+
+        val result = state.uploadNow()
+
+        assertEquals(LocationRepository.Result.Uploaded(7_000L, "gps"), result)
+        assertEquals(45.5, state.serverLocation?.lat)
+        assertFalse(state.isUploading)
+    }
+
+    // Should: stop showing the server location and refresh from a current fix when toggled off
+    @Test
+    fun toggle_server_location_off_refreshes_current() = runTest {
+        val loc = androidLocation(lat = 1.0, lng = 2.0)
+        val acquire: suspend (LocationFreshness) -> LocationRequestResult =
+            { LocationRequestResult(loc, "passive", 0, false) }
+        val state = newState(acquireLocation = acquire)
+        state.showServerLocation = true
+
+        val msg = state.toggleServerLocation(false)
+
+        assertNull(msg)
+        assertFalse(state.showServerLocation)
+        assertEquals(1.0, state.currentLocation?.latitude)
+    }
+
     private fun newState(
         listFriends: () -> List<Friend> = { emptyList() },
         updateFriend: (String, Boolean?, Boolean?, String?) -> Unit = mockk(relaxed = true),
@@ -229,6 +313,14 @@ class MapScreenStateTest {
         setAutoSharePref: (Boolean) -> Unit = mockk(relaxed = true),
         onGateChanged: () -> Unit = mockk(relaxed = true),
         cityFor: (Double, Double) -> City? = { _, _ -> null },
+        acquireLocation: suspend (LocationFreshness) -> LocationRequestResult =
+            { LocationRequestResult(null, "none", 0, false) },
+        push: suspend (AndroidLocation, String) -> LocationRepository.Result =
+            { _, _ -> LocationRepository.Result.NoLocation },
+        fetchSelfLocation: suspend () -> LocationSyncService.FetchResult = mockk(relaxed = true),
+        scheduleWorker: () -> Unit = mockk(relaxed = true),
+        cancelWorker: () -> Unit = mockk(relaxed = true),
+        initialName: String = "Me",
     ) = MapScreenState(
         listFriends = listFriends,
         updateFriend = updateFriend,
@@ -236,6 +328,12 @@ class MapScreenStateTest {
         getAutoSharePref = { autoShare },
         setAutoSharePref = setAutoSharePref,
         onGateChanged = onGateChanged,
-        cityFor = cityFor
+        cityFor = cityFor,
+        acquireLocation = acquireLocation,
+        push = push,
+        fetchSelfLocation = fetchSelfLocation,
+        scheduleWorker = scheduleWorker,
+        cancelWorker = cancelWorker,
+        initialName = initialName,
     )
 }
