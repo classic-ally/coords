@@ -23,7 +23,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.clickable
 import uniffi.transponder_core.LicenseGroup
 import androidx.compose.foundation.layout.size
-import androidx.compose.ui.draw.rotate
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -52,14 +51,9 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Explore
-import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Navigation
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CloudUpload
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.RemoveCircle
 import androidx.compose.material.icons.outlined.ArrowDownward
 import androidx.compose.material.icons.outlined.ArrowUpward
@@ -90,15 +84,10 @@ import uniffi.transponder_core.Friend
 import uniffi.transponder_core.Location as CoreLocation
 import uniffi.transponder_core.Identity
 import uniffi.transponder_core.generateFriendLink
-import uniffi.transponder_core.findNearestCityInRegion
 import uniffi.transponder_core.City
 import sh.bentley.transponder.components.FriendRow
-import sh.bentley.transponder.components.FriendList
 import sh.bentley.transponder.components.SheetHeader
 import sh.bentley.transponder.components.QrCodeView
-import sh.bentley.transponder.sheets.FriendDetailSheet
-import sh.bentley.transponder.sheets.MyLinkSheet
-import sh.bentley.transponder.sheets.ProfileSheet
 import sh.bentley.transponder.sheets.AboutSheet
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -163,6 +152,11 @@ fun MainScreen(
     val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val sheetPeekHeight = (configuration.screenHeightDp * 0.4f).dp
     val sheetPeekHeightPx = with(density) { sheetPeekHeight.toPx() }
+    val hasBackgroundPermission = LocationSyncWorker.hasBackgroundLocationPermission(context)
+    // Revoke the stored auto-share preference if the permission is gone, before seeding the holder
+    if (identityStore.autoShareEnabled && !hasBackgroundPermission) {
+        identityStore.autoShareEnabled = false
+    }
     val mapState = remember { MapScreenState.from(context, identityStore) }
 
     var selectedMapStyle by remember { mutableStateOf(MapStyle.BASIC) }
@@ -179,21 +173,6 @@ fun MainScreen(
     BackHandler(enabled = mapState.isEditMode) {
         mapState.isEditMode = false
     }
-    var myName by remember { mutableStateOf(identityStore.displayName ?: "Me") }
-
-    // Check if auto-share should be enabled (requires both setting AND permission)
-    val hasBackgroundPermission = LocationSyncWorker.hasBackgroundLocationPermission(context)
-    var autoShareEnabled by remember {
-        mutableStateOf(
-            if (identityStore.autoShareEnabled && !hasBackgroundPermission) {
-                // Permission was revoked, update stored value
-                identityStore.autoShareEnabled = false
-                false
-            } else {
-                identityStore.autoShareEnabled && hasBackgroundPermission
-            }
-        )
-    }
     var pendingAutoShareEnable by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
     val styleUrl = selectedMapStyle.getUrl(isDarkTheme)
@@ -207,12 +186,7 @@ fun MainScreen(
         )
     }
 
-    var currentLocationTimestamp by remember { mutableStateOf<Long?>(null) }
-    var serverLocation by remember { mutableStateOf<LocationDisplayData?>(null) }
-    var isUploading by remember { mutableStateOf(false) }
     var isFetchingFriends by remember { mutableStateOf(false) }
-    var isFetchingServerLocation by remember { mutableStateOf(false) }
-    var serverVersion by remember { mutableStateOf<String?>(null) }
     var isInitialLocationLoading by remember { mutableStateOf(true) }
     val friends = mapState.friends
     val selectedFriend = mapState.selectedFriend
@@ -257,7 +231,7 @@ fun MainScreen(
                 val result = requestLocation(context, LocationFreshness.ALWAYS_FRESH, LocationSettings.from(identityStore))
                 result.location?.let { location ->
                     mapState.currentLocation = LatLng(location.latitude, location.longitude)
-                    currentLocationTimestamp = location.time
+                    mapState.currentLocationTimestamp = location.time
                     mapState.currentAccuracy = location.accuracy
                     repo.push(location, result.source)
                 }
@@ -287,10 +261,10 @@ fun MainScreen(
         val url = identityStore.serverUrl ?: return@LaunchedEffect
         when (val result = http.validateServer(url)) {
             is ServerValidationResult.Valid -> {
-                serverVersion = result.info.version
+                mapState.serverVersion = result.info.version
             }
             is ServerValidationResult.Invalid -> {
-                serverVersion = null
+                mapState.serverVersion = null
             }
         }
     }
@@ -322,11 +296,9 @@ fun MainScreen(
         if (permissions[Manifest.permission.ACCESS_BACKGROUND_LOCATION] == true) {
             // If user was trying to enable auto-share, complete that action
             if (pendingAutoShareEnable) {
-                autoShareEnabled = true
-                identityStore.autoShareEnabled = true
+                mapState.setAutoShareGranted()
                 pendingAutoShareEnable = false
                 requestNotificationPermissionIfNeeded()
-                LocationUploadService.poke(context)
             }
             LocationSyncWorker.schedule(context)
         } else if (pendingAutoShareEnable) {
@@ -342,7 +314,7 @@ fun MainScreen(
             val result = requestLocation(context, LocationFreshness.CACHED_OKAY, LocationSettings.from(identityStore))
             result.location?.let { location ->
                 mapState.currentLocation = LatLng(location.latitude, location.longitude)
-                currentLocationTimestamp = location.time
+                mapState.currentLocationTimestamp = location.time
                 mapState.currentAccuracy = location.accuracy
 
                 // Auto-upload on app launch if enabled (repo skips when no recipients)
@@ -426,292 +398,52 @@ fun MainScreen(
             fullHeight = fullHeight,
             screenHeight = screenHeight,
             sheetContent = {
-                when {
-                    showProfile -> {
-                        // My profile view
-                        val currentLocationData = mapState.currentLocation?.let { loc ->
-                            LocationDisplayData(
-                                lat = loc.latitude,
-                                lng = loc.longitude,
-                                accuracy = mapState.currentAccuracy,
-                                timestamp = currentLocationTimestamp ?: System.currentTimeMillis(),
-                                city = findNearestCityInRegion(loc.latitude, loc.longitude)
-                            )
+                SheetContent(
+                    state = mapState,
+                    showProfile = showProfile,
+                    isFetchingFriends = isFetchingFriends,
+                    listBottomPadding = listBottomPadding,
+                    onProfileDismiss = {
+                        showProfile = false
+                        mapState.requestCamera(CameraAction.FitAllFriends)
+                    },
+                    onOpenProfile = {
+                        showProfile = true
+                        mapState.requestCamera(CameraAction.CenterOnMyLocation)
+                        scope.launch { sheetState.animateToAnchor(SheetAnchor.Partial) }
+                    },
+                    onRefreshFriends = { scope.launch { fetchFriendsIfNeeded(force = true) } },
+                    onOpenStylePicker = { showStylePicker = true },
+                    onOpenServerUrl = { showServerUrlDialog = true },
+                    onOpenEditProfileName = { showEditProfileNameDialog = true },
+                    onOpenEditFriendName = { showEditFriendNameDialog = true },
+                    onOpenLocationSettings = { showLocationSettings = true },
+                    onShowAbout = { showAboutDialog = true },
+                    onAddFriend = {
+                        addFriendLocationDeferred = scope.async {
+                            requestLocation(context, LocationFreshness.ALWAYS_FRESH, LocationSettings.from(identityStore)).location
                         }
-                        ProfileSheet(
-                            name = myName,
-                            identityStore = identityStore,
-                            currentLocation = currentLocationData,
-                            serverLocation = serverLocation,
-                            showServerLocation = mapState.showServerLocation,
-                            onShowServerLocationChange = { newValue ->
-                                if (isFetchingServerLocation) return@ProfileSheet
-                                scope.launch {
-                                    if (newValue) {
-                                        // Fetch our location from the server first
-                                        isFetchingServerLocation = true
-                                        when (val result = locationSyncService.fetchSelfLocation()) {
-                                            is LocationSyncService.FetchResult.Success -> {
-                                                val loc = result.locations.firstOrNull()?.location
-                                                if (loc != null) {
-                                                    serverLocation = LocationDisplayData(
-                                                        lat = loc.latitude,
-                                                        lng = loc.longitude,
-                                                        accuracy = loc.accuracy,
-                                                        timestamp = loc.timestamp.toLong(),
-                                                        city = findNearestCityInRegion(loc.latitude, loc.longitude)
-                                                    )
-                                                    mapState.showServerLocation = true
-                                                } else {
-                                                    android.widget.Toast.makeText(context, "No location published yet", android.widget.Toast.LENGTH_SHORT).show()
-                                                }
-                                            }
-                                            is LocationSyncService.FetchResult.Error -> {
-                                                android.widget.Toast.makeText(context, result.message, android.widget.Toast.LENGTH_SHORT).show()
-                                            }
-                                        }
-                                        isFetchingServerLocation = false
-                                    } else {
-                                        // Refresh current location when switching back to show it
-                                        mapState.showServerLocation = false
-                                        val result = requestLocation(context, LocationFreshness.CACHED_OKAY, LocationSettings.from(identityStore))
-                                        result.location?.let { location ->
-                                            mapState.currentLocation = LatLng(location.latitude, location.longitude)
-                                            currentLocationTimestamp = location.time
-                                            mapState.currentAccuracy = location.accuracy
-                                        }
-                                    }
-                                }
-                            },
-                            isFetchingServerLocation = isFetchingServerLocation,
-                            autoShareEnabled = autoShareEnabled,
-                            onAutoShareEnabledChange = { enabled ->
-                                if (enabled) {
-                                    // User wants to enable - check permission first
-                                    if (LocationSyncWorker.hasBackgroundLocationPermission(context)) {
-                                        autoShareEnabled = true
-                                        identityStore.autoShareEnabled = true
-                                        LocationSyncWorker.schedule(context)
-                                        requestNotificationPermissionIfNeeded()
-                                        LocationUploadService.poke(context)
-                                    } else {
-                                        // Need to request permission
-                                        pendingAutoShareEnable = true
-                                        permissionLauncher.launch(
-                                            arrayOf(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
-                                        )
-                                    }
-                                } else {
-                                    // Disable auto-share
-                                    autoShareEnabled = false
-                                    identityStore.autoShareEnabled = false
-                                    LocationSyncWorker.cancel(context)
-                                    LocationUploadService.poke(context)
-                                }
-                            },
-                            isUploading = isUploading,
-                            onUpload = {
-                                scope.launch {
-                                    isUploading = true
-                                    // Get fresh location before uploading
-                                    val locationResult = requestLocation(context, LocationFreshness.ALWAYS_FRESH, LocationSettings.from(identityStore))
-                                    val location = locationResult.location
-                                    if (location == null) {
-                                        android.widget.Toast.makeText(context, "Could not get current location", android.widget.Toast.LENGTH_SHORT).show()
-                                        isUploading = false
-                                        return@launch
-                                    }
-                                    // Update current location state
-                                    mapState.currentLocation = LatLng(location.latitude, location.longitude)
-                                    currentLocationTimestamp = location.time
-                                    mapState.currentAccuracy = location.accuracy
-
-                                    when (val r = repo.push(location, locationResult.source)) {
-                                        is LocationRepository.Result.Uploaded -> {
-                                            // Update server location to match what we uploaded
-                                            serverLocation = LocationDisplayData(
-                                                lat = location.latitude,
-                                                lng = location.longitude,
-                                                accuracy = location.accuracy,
-                                                timestamp = location.time,
-                                                city = findNearestCityInRegion(location.latitude, location.longitude)
-                                            )
-                                        }
-                                        is LocationRepository.Result.Skipped -> {
-                                            android.widget.Toast.makeText(context, "No friends to share with", android.widget.Toast.LENGTH_SHORT).show()
-                                        }
-                                        is LocationRepository.Result.Error -> {
-                                            android.widget.Toast.makeText(context, r.message, android.widget.Toast.LENGTH_SHORT).show()
-                                        }
-                                        is LocationRepository.Result.NoLocation -> {}
-                                    }
-                                    isUploading = false
-                                }
-                            },
-                            onDismiss = {
-                                showProfile = false
-                                mapState.requestCamera(CameraAction.FitAllFriends)
-                            },
-                            onNameEdit = {
-                                showEditProfileNameDialog = true
-                            },
-                            onEditServerUrl = {
-                                showServerUrlDialog = true
-                            },
-                            onLocationSettings = {
-                                showLocationSettings = true
-                            },
-                            onShowAbout = { showAboutDialog = true },
-                            serverVersion = serverVersion
-                        )
-                    }
-                    selectedFriend != null -> {
-                        // Friend detail view
-                        FriendDetailSheet(
-                            friend = selectedFriend!!,
-                            onDismiss = {
-                                mapState.selectedFriendPubkey = null
-                                mapState.requestCamera(CameraAction.FitAllFriends)
-                            },
-                            onNameEdit = {
-                                showEditFriendNameDialog = true
-                            },
-                            onToggleShare = { mapState.toggleShare(selectedFriend!!) },
-                            onToggleFetch = { mapState.toggleFetch(selectedFriend!!) },
-                            onDelete = {
-                                mapState.deleteFriend(selectedFriend!!)
-                                mapState.requestCamera(CameraAction.FitAllFriends)
+                        showAddFriend = true
+                    },
+                    onAutoShareEnabledChange = { enabled ->
+                        if (enabled) {
+                            if (LocationSyncWorker.hasBackgroundLocationPermission(context)) {
+                                mapState.setAutoShareGranted()
+                                requestNotificationPermissionIfNeeded()
+                            } else {
+                                pendingAutoShareEnable = true
+                                permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_BACKGROUND_LOCATION))
                             }
-                        )
-                    }
-                    else -> {
-                        // Friends list view
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(horizontal = 16.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "Friends",
-                                    style = MaterialTheme.typography.titleLarge
-                                )
-                                Row {
-                                    // Compass - only visible when map is rotated
-                                    if (mapState.mapBearing != 0.0) {
-                                        IconButton(
-                                            onClick = { mapState.requestCamera(CameraAction.ResetNorth) }
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Explore,
-                                                contentDescription = "Reset to north",
-                                                // Offset by -45 because Explore icon points NE by default
-                                                modifier = Modifier.rotate(-mapState.mapBearing.toFloat() - 45f)
-                                            )
-                                        }
-                                    }
-
-                                    if (mapState.isEditMode) {
-                                        // Refresh button in edit mode
-                                        IconButton(
-                                            onClick = {
-                                                scope.launch {
-                                                    fetchFriendsIfNeeded(force = true)
-                                                }
-                                            },
-                                            enabled = !isFetchingFriends
-                                        ) {
-                                            if (isFetchingFriends) {
-                                                CircularProgressIndicator(
-                                                    modifier = Modifier.size(24.dp),
-                                                    strokeWidth = 2.dp
-                                                )
-                                            } else {
-                                                Icon(
-                                                    imageVector = Icons.Default.Refresh,
-                                                    contentDescription = "Refresh friends"
-                                                )
-                                            }
-                                        }
-                                        // Done editing
-                                        IconButton(onClick = { mapState.isEditMode = false }) {
-                                            Icon(
-                                                imageVector = Icons.Default.Check,
-                                                contentDescription = "Done editing"
-                                            )
-                                        }
-                                    } else {
-                                        // Map style selector
-                                        IconButton(onClick = { showStylePicker = true }) {
-                                            Icon(
-                                                imageVector = Icons.Default.Map,
-                                                contentDescription = "Change map style"
-                                            )
-                                        }
-                                        // Add Friend button
-                                        IconButton(onClick = {
-                                            // Kick off location request early so GPS can warm up
-                                            addFriendLocationDeferred = scope.async {
-                                                requestLocation(context, LocationFreshness.ALWAYS_FRESH, LocationSettings.from(identityStore)).location
-                                            }
-                                            showAddFriend = true
-                                        }) {
-                                            Icon(
-                                                imageVector = Icons.Default.Add,
-                                                contentDescription = "Add Friend"
-                                            )
-                                        }
-                                        // Edit mode toggle
-                                        IconButton(onClick = { mapState.isEditMode = true }) {
-                                            Icon(
-                                                imageVector = Icons.Default.Edit,
-                                                contentDescription = "Edit friends"
-                                            )
-                                        }
-                                        // Profile button
-                                        IconButton(
-                                            onClick = {
-                                                showProfile = true
-                                                mapState.requestCamera(CameraAction.CenterOnMyLocation)
-                                                scope.launch { sheetState.animateToAnchor(SheetAnchor.Partial) }
-                                            }
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Person,
-                                                contentDescription = "Profile"
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-
-                            FriendList(
-                                items = friendsWithCities,
-                                currentLocation = mapState.currentLocation,
-                                isEditMode = mapState.isEditMode,
-                                modifier = Modifier.weight(1f),
-                                bottomPadding = listBottomPadding,
-                                onClick = { friend ->
-                                    if (!mapState.isEditMode) {
-                                        friend.location?.let { loc ->
-                                            selectAndCenterOnFriend(friend.pubkey, loc.latitude, loc.longitude)
-                                        }
-                                    }
-                                },
-                                onToggleShare = { friend -> mapState.toggleShare(friend) },
-                                onToggleFetch = { friend -> mapState.toggleFetch(friend) },
-                                onDelete = { friend ->
-                                    friendToDelete = friend
-                                    showDeleteConfirmation = true
-                                }
-                            )
+                        } else {
+                            mapState.disableAutoShare()
                         }
-                    }
-                }
+                    },
+                    onDeleteFriendRequest = { friend ->
+                        friendToDelete = friend
+                        showDeleteConfirmation = true
+                    },
+                    onSelectFriend = { pubkey, lat, lng -> selectAndCenterOnFriend(pubkey, lat, lng) }
+                )
             }
         ) {
             // Map content
@@ -918,10 +650,10 @@ fun MainScreen(
         // Edit profile name dialog
         if (showEditProfileNameDialog) {
             EditNameDialog(
-                currentName = myName,
+                currentName = mapState.myName,
                 label = "Your name",
                 onSave = { newName ->
-                    myName = newName
+                    mapState.myName = newName
                     identityStore.displayName = newName
                 },
                 onDismiss = { showEditProfileNameDialog = false }
