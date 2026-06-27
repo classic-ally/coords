@@ -189,6 +189,38 @@ class MapScreenStateTest {
         verify(exactly = 1) { cityFor(51.0, -1.0) }
     }
 
+    // Should: queue the requested camera action for the map to consume
+    @Test
+    fun request_camera_sets_pending_action() {
+        val state = newState()
+        val target = CameraAction.FitAllFriends
+
+        state.requestCamera(target)
+
+        assertSame(target, state.pendingCameraAction)
+    }
+
+    // Should: drop the pending camera action once the map has handled it
+    @Test
+    fun clear_camera_action_nulls_pending() {
+        val state = newState()
+        state.requestCamera(CameraAction.FitAllFriends)
+
+        state.clearCameraAction()
+
+        assertNull(state.pendingCameraAction)
+    }
+
+    // Should: record the map's reported bearing for the compass to read
+    @Test
+    fun on_bearing_updates_map_bearing() {
+        val state = newState()
+
+        state.onBearing(42.0)
+
+        assertEquals(42.0, state.mapBearing, 0.0)
+    }
+
     private fun newState(
         listFriends: () -> List<Friend> = { emptyList() },
         updateFriend: (String, Boolean?, Boolean?, String?) -> Unit = mockk(relaxed = true),

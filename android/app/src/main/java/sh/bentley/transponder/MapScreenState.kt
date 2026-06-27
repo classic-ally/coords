@@ -15,6 +15,14 @@ import uniffi.transponder_core.mockFriends as coreMockFriends
 import uniffi.transponder_core.removeFriend as coreRemoveFriend
 import uniffi.transponder_core.updateFriend as coreUpdateFriend
 
+/** Pending camera actions for deferred execution after sheet layout */
+sealed class CameraAction {
+    data class CenterOn(val target: LatLng) : CameraAction()
+    data object FitAllFriends : CameraAction()
+    data object CenterOnMyLocation : CameraAction()
+    data object ResetNorth : CameraAction()
+}
+
 /**
  * Holds MapScreen domain state and the side-effecting operations that sync with
  * the core (friends list, auto-share preference) and the foreground service. The
@@ -41,6 +49,25 @@ class MapScreenState(
     var isEditMode by mutableStateOf(false)
     var showServerLocation by mutableStateOf(false)
     var currentLocation by mutableStateOf<LatLng?>(null)
+    var currentAccuracy by mutableStateOf(0f)
+
+    // Map output state
+    var pendingCameraAction by mutableStateOf<CameraAction?>(null)
+        private set
+    var mapBearing by mutableStateOf(0.0)
+        private set
+
+    fun requestCamera(action: CameraAction) {
+        pendingCameraAction = action
+    }
+
+    fun clearCameraAction() {
+        pendingCameraAction = null
+    }
+
+    fun onBearing(bearing: Double) {
+        mapBearing = bearing
+    }
 
     val selectedFriend: Friend?
         get() = friends.find { it.pubkey == selectedFriendPubkey }

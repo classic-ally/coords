@@ -81,27 +81,11 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
-import org.maplibre.android.MapLibre
-import org.maplibre.android.camera.CameraPosition
-import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
-import org.maplibre.android.geometry.LatLngBounds
-import org.maplibre.android.maps.MapView
-import org.maplibre.android.maps.MapLibreMap
-import org.maplibre.android.maps.Style
-import org.maplibre.android.style.expressions.Expression
-import org.maplibre.android.style.layers.CircleLayer
-import org.maplibre.android.style.layers.PropertyFactory
-import org.maplibre.android.style.layers.SymbolLayer
-import org.maplibre.android.style.sources.GeoJsonSource
-import org.maplibre.geojson.Feature
-import org.maplibre.geojson.FeatureCollection
-import org.maplibre.geojson.Point
 import uniffi.transponder_core.Friend
 import uniffi.transponder_core.Location as CoreLocation
 import uniffi.transponder_core.Identity
@@ -133,12 +117,6 @@ import androidx.compose.material.icons.filled.QrCode2
 
 // Colors for map annotations
 
-/** Pending camera actions for deferred execution after sheet layout */
-sealed class CameraAction {
-    data class CenterOn(val target: LatLng) : CameraAction()
-    data object FitAllFriends : CameraAction()
-    data object CenterOnMyLocation : CameraAction()
-}
 
 // Available map styles
 enum class MapStyle(val displayName: String, val lightUrl: String, val darkUrl: String) {
@@ -230,20 +208,12 @@ fun MainScreen(
     }
 
     var currentLocationTimestamp by remember { mutableStateOf<Long?>(null) }
-    var currentAccuracy by remember { mutableStateOf(0f) }
     var serverLocation by remember { mutableStateOf<LocationDisplayData?>(null) }
     var isUploading by remember { mutableStateOf(false) }
     var isFetchingFriends by remember { mutableStateOf(false) }
     var isFetchingServerLocation by remember { mutableStateOf(false) }
     var serverVersion by remember { mutableStateOf<String?>(null) }
-    var pendingCameraAction by remember { mutableStateOf<CameraAction?>(null) }
-    var hasSetInitialBounds by remember { mutableStateOf(false) }
     var isInitialLocationLoading by remember { mutableStateOf(true) }
-    var mapBearing by remember { mutableStateOf(0.0) }
-    var mapRef by remember { mutableStateOf<MapLibreMap?>(null) }
-    var mapViewRef by remember { mutableStateOf<MapView?>(null) }
-    var styleRef by remember { mutableStateOf<Style?>(null) }
-    var currentStyleUrl by remember { mutableStateOf<String?>(null) }
     val friends = mapState.friends
     val selectedFriend = mapState.selectedFriend
 
@@ -288,7 +258,7 @@ fun MainScreen(
                 result.location?.let { location ->
                     mapState.currentLocation = LatLng(location.latitude, location.longitude)
                     currentLocationTimestamp = location.time
-                    currentAccuracy = location.accuracy
+                    mapState.currentAccuracy = location.accuracy
                     repo.push(location, result.source)
                 }
             }
@@ -373,7 +343,7 @@ fun MainScreen(
             result.location?.let { location ->
                 mapState.currentLocation = LatLng(location.latitude, location.longitude)
                 currentLocationTimestamp = location.time
-                currentAccuracy = location.accuracy
+                mapState.currentAccuracy = location.accuracy
 
                 // Auto-upload on app launch if enabled (repo skips when no recipients)
                 if (identityStore.autoShareEnabled) {
@@ -386,213 +356,6 @@ fun MainScreen(
         }
     }
 
-    // Update map annotations when location or friends change
-    LaunchedEffect(mapState.currentLocation, currentAccuracy, styleRef, friends) {
-        val style = styleRef ?: return@LaunchedEffect
-
-        // Generate and add icons to the style for each friend
-        friends.filter { it.fetchFrom && it.location != null }.forEach { friend ->
-            val iconId = "icon-friend-${friend.pubkey}"
-            if (style.getImage(iconId) == null) {
-                val icon = getFriendMarkerIcon(friend.pubkey, friend.name, friend.color)
-                style.addImage(iconId, icon)
-            }
-        }
-
-        // Add self icon (plain blue dot)
-        if (style.getImage("icon-self") == null) {
-            style.addImage("icon-self", generateSelfMarkerIcon())
-        }
-
-        // Build features for location markers
-        val dotFeatures = mutableListOf<Feature>()
-
-        // Add self location
-        mapState.currentLocation?.let { loc ->
-            val point = Point.fromLngLat(loc.longitude, loc.latitude)
-            val feature = Feature.fromGeometry(point)
-            feature.addStringProperty("type", "self")
-            feature.addStringProperty("iconId", "icon-self")
-            feature.addStringProperty("color", SELF_COLOR)
-            feature.addNumberProperty("accuracy", currentAccuracy)
-            dotFeatures.add(feature)
-        }
-
-        // Add friend locations (only those we're tracking)
-        friends.filter { it.fetchFrom }.forEach { friend ->
-            friend.location?.let { loc ->
-                val point = Point.fromLngLat(loc.longitude, loc.latitude)
-                val feature = Feature.fromGeometry(point)
-                feature.addStringProperty("type", "friend")
-                feature.addStringProperty("pubkey", friend.pubkey)
-                feature.addStringProperty("iconId", "icon-friend-${friend.pubkey}")
-                feature.addStringProperty("color", friend.color)
-                feature.addNumberProperty("accuracy", loc.accuracy)
-                dotFeatures.add(feature)
-            }
-        }
-
-        // Update or create the GeoJSON source
-        val existingSource = style.getSourceAs<GeoJsonSource>(SOURCE_LOCATIONS)
-        if (existingSource != null) {
-            existingSource.setGeoJson(FeatureCollection.fromFeatures(dotFeatures))
-        } else {
-            // First time: create source and layers
-            style.addSource(GeoJsonSource(SOURCE_LOCATIONS, FeatureCollection.fromFeatures(dotFeatures)))
-
-            // Accuracy circles layer (rendered first, so underneath dots)
-            // Uses per-feature color from the "color" property
-            style.addLayer(
-                CircleLayer(LAYER_ACCURACY, SOURCE_LOCATIONS).withProperties(
-                    PropertyFactory.circleRadius(
-                        Expression.interpolate(
-                            Expression.exponential(2),
-                            Expression.zoom(),
-                            Expression.stop(0, Expression.division(Expression.get("accuracy"), Expression.literal(32768.0))),
-                            Expression.stop(15, Expression.get("accuracy")),
-                            Expression.stop(22, Expression.product(Expression.get("accuracy"), Expression.literal(128.0)))
-                        )
-                    ),
-                    PropertyFactory.circleColor(Expression.get("color")),
-                    PropertyFactory.circleOpacity(0.2f),
-                    PropertyFactory.circleStrokeWidth(2f),
-                    PropertyFactory.circleStrokeColor(Expression.get("color"))
-                )
-            )
-
-            // Marker icons layer (rendered on top using generated bitmaps)
-            style.addLayer(
-                SymbolLayer(LAYER_DOTS, SOURCE_LOCATIONS).withProperties(
-                    PropertyFactory.iconImage(Expression.get("iconId")),
-                    PropertyFactory.iconAllowOverlap(true),
-                    PropertyFactory.iconIgnorePlacement(true)
-                )
-            )
-        }
-    }
-
-    // Update selected friend label on map
-    LaunchedEffect(selectedFriend, styleRef, isDarkTheme) {
-        val style = styleRef ?: return@LaunchedEffect
-
-        val features = mutableListOf<Feature>()
-        selectedFriend?.location?.let { loc ->
-            val point = Point.fromLngLat(loc.longitude, loc.latitude)
-            val feature = Feature.fromGeometry(point)
-            feature.addStringProperty("name", selectedFriend!!.name)
-            features.add(feature)
-        }
-
-        val existingSource = style.getSourceAs<GeoJsonSource>(SOURCE_SELECTED)
-        if (existingSource != null) {
-            existingSource.setGeoJson(FeatureCollection.fromFeatures(features))
-        } else {
-            // Create source and label layer
-            style.addSource(GeoJsonSource(SOURCE_SELECTED, FeatureCollection.fromFeatures(features)))
-
-            val textColor = if (isDarkTheme) "#FFFFFF" else "#000000"
-            val haloColor = if (isDarkTheme) "#000000" else "#FFFFFF"
-
-            style.addLayer(
-                SymbolLayer(LAYER_SELECTED_LABEL, SOURCE_SELECTED).withProperties(
-                    PropertyFactory.textField(Expression.get("name")),
-                    PropertyFactory.textSize(14f),
-                    PropertyFactory.textColor(textColor),
-                    PropertyFactory.textHaloColor(haloColor),
-                    PropertyFactory.textHaloWidth(2f),
-                    PropertyFactory.textOffset(arrayOf(0f, -1.5f)),
-                    PropertyFactory.textAnchor("bottom"),
-                    PropertyFactory.textFont(arrayOf("Noto Sans Bold"))
-                )
-            )
-        }
-    }
-
-    // Trigger initial fit when map is ready
-    LaunchedEffect(mapRef) {
-        if (mapRef != null && !hasSetInitialBounds) {
-            pendingCameraAction = CameraAction.FitAllFriends
-            hasSetInitialBounds = true
-        }
-    }
-
-    // Execute pending camera actions
-    // Account for partial sheet covering bottom 40% of screen
-    LaunchedEffect(pendingCameraAction) {
-        val action = pendingCameraAction ?: return@LaunchedEffect
-        val map = mapRef ?: return@LaunchedEffect
-
-        // Bottom padding to offset center into visible area above sheet
-        val bottomPadding = sheetPeekHeightPx.toDouble()
-
-        when (action) {
-            is CameraAction.CenterOn -> {
-                // Use CameraPosition with bottom padding to offset the focal point
-                val cameraPosition = CameraPosition.Builder()
-                    .target(action.target)
-                    .zoom(15.0)
-                    .padding(0.0, 0.0, 0.0, bottomPadding)
-                    .build()
-                map.animateCamera(
-                    CameraUpdateFactory.newCameraPosition(cameraPosition),
-                    CAMERA_ANIMATION_DURATION_MS
-                )
-            }
-            is CameraAction.FitAllFriends -> {
-                val friendLocations = friends.mapNotNull { friend ->
-                    friend.location?.let { LatLng(it.latitude, it.longitude) }
-                }
-
-                when {
-                    friendLocations.size >= 2 -> {
-                        // Multiple locations: fit bounds
-                        val boundsBuilder = LatLngBounds.Builder()
-                        friendLocations.forEach { boundsBuilder.include(it) }
-                        val bounds = boundsBuilder.build()
-                        // Add extra bottom padding to account for sheet
-                        val boundsBottomPadding = sheetPeekHeightPx.toInt() + 100
-                        map.animateCamera(
-                            CameraUpdateFactory.newLatLngBounds(bounds, 100, 100, 100, boundsBottomPadding),
-                            CAMERA_ANIMATION_DURATION_MS
-                        )
-                    }
-                    friendLocations.size == 1 -> {
-                        // Single location: center on it with reasonable zoom
-                        val cameraPosition = CameraPosition.Builder()
-                            .target(friendLocations.first())
-                            .zoom(12.0)
-                            .padding(0.0, 0.0, 0.0, bottomPadding)
-                            .build()
-                        map.animateCamera(
-                            CameraUpdateFactory.newCameraPosition(cameraPosition),
-                            CAMERA_ANIMATION_DURATION_MS
-                        )
-                    }
-                    else -> {
-                        // No locations: show world view
-                        map.animateCamera(
-                            CameraUpdateFactory.newLatLngZoom(LatLng(20.0, 0.0), 1.0),
-                            CAMERA_ANIMATION_DURATION_MS
-                        )
-                    }
-                }
-            }
-            is CameraAction.CenterOnMyLocation -> {
-                val loc = mapState.currentLocation ?: return@LaunchedEffect
-                // Use CameraPosition with bottom padding to offset the focal point
-                val cameraPosition = CameraPosition.Builder()
-                    .target(loc)
-                    .zoom(15.0)
-                    .padding(0.0, 0.0, 0.0, bottomPadding)
-                    .build()
-                map.animateCamera(
-                    CameraUpdateFactory.newCameraPosition(cameraPosition),
-                    CAMERA_ANIMATION_DURATION_MS
-                )
-            }
-        }
-        pendingCameraAction = null
-    }
 
     if (!hasPermission) {
         Box(
@@ -634,7 +397,7 @@ fun MainScreen(
         // Helper to select a friend, center map, and show detail sheet
         fun selectAndCenterOnFriend(pubkey: String, lat: Double, lng: Double) {
             mapState.selectedFriendPubkey = pubkey
-            pendingCameraAction = CameraAction.CenterOn(LatLng(lat, lng))
+            mapState.requestCamera(CameraAction.CenterOn(LatLng(lat, lng)))
             scope.launch { sheetState.animateToAnchor(SheetAnchor.Partial) }
         }
 
@@ -649,10 +412,10 @@ fun MainScreen(
         BackHandler(enabled = showProfile || selectedFriend != null) {
             if (showProfile) {
                 showProfile = false
-                pendingCameraAction = CameraAction.FitAllFriends
+                mapState.requestCamera(CameraAction.FitAllFriends)
             } else if (mapState.selectedFriendPubkey != null) {
                 mapState.selectedFriendPubkey = null
-                pendingCameraAction = CameraAction.FitAllFriends
+                mapState.requestCamera(CameraAction.FitAllFriends)
             }
         }
 
@@ -670,7 +433,7 @@ fun MainScreen(
                             LocationDisplayData(
                                 lat = loc.latitude,
                                 lng = loc.longitude,
-                                accuracy = currentAccuracy,
+                                accuracy = mapState.currentAccuracy,
                                 timestamp = currentLocationTimestamp ?: System.currentTimeMillis(),
                                 city = findNearestCityInRegion(loc.latitude, loc.longitude)
                             )
@@ -715,7 +478,7 @@ fun MainScreen(
                                         result.location?.let { location ->
                                             mapState.currentLocation = LatLng(location.latitude, location.longitude)
                                             currentLocationTimestamp = location.time
-                                            currentAccuracy = location.accuracy
+                                            mapState.currentAccuracy = location.accuracy
                                         }
                                     }
                                 }
@@ -761,7 +524,7 @@ fun MainScreen(
                                     // Update current location state
                                     mapState.currentLocation = LatLng(location.latitude, location.longitude)
                                     currentLocationTimestamp = location.time
-                                    currentAccuracy = location.accuracy
+                                    mapState.currentAccuracy = location.accuracy
 
                                     when (val r = repo.push(location, locationResult.source)) {
                                         is LocationRepository.Result.Uploaded -> {
@@ -787,7 +550,7 @@ fun MainScreen(
                             },
                             onDismiss = {
                                 showProfile = false
-                                pendingCameraAction = CameraAction.FitAllFriends
+                                mapState.requestCamera(CameraAction.FitAllFriends)
                             },
                             onNameEdit = {
                                 showEditProfileNameDialog = true
@@ -808,7 +571,7 @@ fun MainScreen(
                             friend = selectedFriend!!,
                             onDismiss = {
                                 mapState.selectedFriendPubkey = null
-                                pendingCameraAction = CameraAction.FitAllFriends
+                                mapState.requestCamera(CameraAction.FitAllFriends)
                             },
                             onNameEdit = {
                                 showEditFriendNameDialog = true
@@ -817,7 +580,7 @@ fun MainScreen(
                             onToggleFetch = { mapState.toggleFetch(selectedFriend!!) },
                             onDelete = {
                                 mapState.deleteFriend(selectedFriend!!)
-                                pendingCameraAction = CameraAction.FitAllFriends
+                                mapState.requestCamera(CameraAction.FitAllFriends)
                             }
                         )
                     }
@@ -839,22 +602,15 @@ fun MainScreen(
                                 )
                                 Row {
                                     // Compass - only visible when map is rotated
-                                    if (mapBearing != 0.0) {
+                                    if (mapState.mapBearing != 0.0) {
                                         IconButton(
-                                            onClick = {
-                                                mapRef?.let { map ->
-                                                    map.animateCamera(
-                                                        CameraUpdateFactory.bearingTo(0.0),
-                                                        CAMERA_ANIMATION_DURATION_MS
-                                                    )
-                                                }
-                                            }
+                                            onClick = { mapState.requestCamera(CameraAction.ResetNorth) }
                                         ) {
                                             Icon(
                                                 imageVector = Icons.Default.Explore,
                                                 contentDescription = "Reset to north",
                                                 // Offset by -45 because Explore icon points NE by default
-                                                modifier = Modifier.rotate(-mapBearing.toFloat() - 45f)
+                                                modifier = Modifier.rotate(-mapState.mapBearing.toFloat() - 45f)
                                             )
                                         }
                                     }
@@ -920,7 +676,7 @@ fun MainScreen(
                                         IconButton(
                                             onClick = {
                                                 showProfile = true
-                                                pendingCameraAction = CameraAction.CenterOnMyLocation
+                                                mapState.requestCamera(CameraAction.CenterOnMyLocation)
                                                 scope.launch { sheetState.animateToAnchor(SheetAnchor.Partial) }
                                             }
                                         ) {
@@ -959,87 +715,15 @@ fun MainScreen(
             }
         ) {
             // Map content
-            Box(modifier = Modifier.fillMaxSize()) {
-                AndroidView(
-                    factory = { ctx ->
-                        MapLibre.getInstance(ctx)
-                        MapView(ctx).apply {
-                            onCreate(null)
-                            onStart()
-                            onResume()
-                            mapViewRef = this
-                            getMapAsync { map ->
-                                mapRef = map
-                                // Prefetch tiles 4 zoom levels lower for smoother panning
-                                map.setPrefetchZoomDelta(4)
-                                // Disable built-in compass and attribution (we have our own)
-                                map.uiSettings.isCompassEnabled = false
-                                map.uiSettings.isAttributionEnabled = false
-                                map.setStyle(styleUrl) { style ->
-                                    currentStyleUrl = styleUrl
-                                    styleRef = style
-                                }
-                                // Track bearing for compass
-                                map.addOnCameraIdleListener {
-                                    mapBearing = map.cameraPosition.bearing
-                                }
-                                // Handle tap on friend markers
-                                map.addOnMapClickListener { latLng ->
-                                    val screenPoint = map.projection.toScreenLocation(latLng)
-                                    val features = map.queryRenderedFeatures(screenPoint, LAYER_DOTS)
-                                    val friendFeature = features.firstOrNull {
-                                        it.getStringProperty("type") == "friend"
-                                    }
-                                    if (friendFeature != null) {
-                                        val pubkey = friendFeature.getStringProperty("pubkey")
-                                        val point = friendFeature.geometry() as? Point
-                                        if (pubkey != null && point != null) {
-                                            selectAndCenterOnFriend(pubkey, point.latitude(), point.longitude())
-                                        }
-                                        true
-                                    } else {
-                                        mapState.selectedFriendPubkey = null
-                                        false
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    update = { _ ->
-                        // Only update style when theme actually changes
-                        if (currentStyleUrl != null && currentStyleUrl != styleUrl) {
-                            mapRef?.setStyle(styleUrl) { style ->
-                                currentStyleUrl = styleUrl
-                                styleRef = style
-                            }
-                        }
-                    },
-                    modifier = Modifier.fillMaxSize()
-                )
-
-                // Dim overlay when viewing friend with no location
-                if (selectedFriend != null && selectedFriend?.location == null) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.5f))
-                    )
-                }
-
-                // Copyright/attribution button
-                Text(
-                    text = "©",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = if (isDarkTheme) ComposeColor.White else ComposeColor.Black,
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(
-                            start = 12.dp,
-                            top = statusBarHeight + 8.dp
-                        )
-                        .clickable { showAboutDialog = true }
-                )
-            }
+            MapCanvas(
+                state = mapState,
+                styleUrl = styleUrl,
+                isDarkTheme = isDarkTheme,
+                sheetPeekHeightPx = sheetPeekHeightPx,
+                statusBarHeight = statusBarHeight,
+                onFriendTapped = { pubkey, lat, lng -> selectAndCenterOnFriend(pubkey, lat, lng) },
+                onShowAbout = { showAboutDialog = true }
+            )
         }
 
         // Map style picker sheet
